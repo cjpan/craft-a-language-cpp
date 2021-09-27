@@ -109,18 +109,13 @@ public:
 class AstNode{
 public:
     //打印对象信息，prefix是前面填充的字符串，通常用于缩进显示
-    virtual void dump(string prefix) = 0;
+    virtual void dump(string prefix) {};
 };
 
 class Statement: public AstNode{
 public:
-    bool isStatementNode(const AstNode* node) {
-        if (!node) {
-            return false;
-        }
-        else {
-            return true;
-        }
+    bool isStatementNode(const AstNode& node) {
+        return typeid(node)==typeid(Statement);
     }
 
     void dump(string prefix) override {
@@ -148,6 +143,11 @@ int main() {
     for (auto& token: tokenArray) {
         cout << token << endl;
     }
+
+    AstNode a;
+    Statement s;
+    cout << s.isStatementNode(a) << endl;
+    cout << s.isStatementNode(s) << endl;
 
     return 0;
 }
