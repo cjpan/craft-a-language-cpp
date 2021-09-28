@@ -62,7 +62,7 @@ std::ostream& operator<<(std::ostream& out, Token& token) {
     return out;
 }
 
-/*
+
 std::vector<Token> tokenArray = {
     {TokenKind::Keyword,      "function"},
     {TokenKind::Identifier,   "sayHello"},
@@ -81,8 +81,8 @@ std::vector<Token> tokenArray = {
     {TokenKind::Seperator,    ";"},
     {TokenKind::Eof,          ""}
 };
-*/
-
+/*
+// test for FunctionCall
 std::vector<Token> tokenArray = {
     {TokenKind::Identifier,   "println"},
     {TokenKind::Seperator,    "("},
@@ -95,6 +95,22 @@ std::vector<Token> tokenArray = {
     {TokenKind::Seperator,    ";"},
     {TokenKind::Eof,          ""}
 };
+// test for functionDecl
+std::vector<Token> tokenArray = {
+    {TokenKind::Keyword,      "function"},
+    {TokenKind::Identifier,   "sayHello"},
+    {TokenKind::Seperator,    "("},
+    {TokenKind::Seperator,    ")"},
+    {TokenKind::Seperator,    "{"},
+    {TokenKind::Identifier,   "println"},
+    {TokenKind::Seperator,    "("},
+    {TokenKind::StringLiteral,"Hello World!"},
+    {TokenKind::Seperator,    ")"},
+    {TokenKind::Seperator,    ";"},
+    {TokenKind::Seperator,    "}"},
+    {TokenKind::Eof,          ""}
+};
+*/
 
 class Tokenizer{
 private:
@@ -180,7 +196,7 @@ public:
     }
 };
 
-class FunctionBody: public AstNode{
+class FunctionBody: public Statement{
 public:
     std::vector<std::shared_ptr<Statement>> stmts;
     FunctionBody(std::vector<std::shared_ptr<Statement>> stmts){
@@ -198,7 +214,7 @@ class FunctionDecl: public Statement{
 public:
     std::string name;       //函数名称
     std::shared_ptr<FunctionBody> body; //函数体
-    FunctionDecl(std::string name, std::shared_ptr<FunctionBody> body){
+    FunctionDecl(const std::string& name, std::shared_ptr<FunctionBody> body){
         this->name = name;
         this->body = body;
         this->type = AstNodeType::FunctionDecl;
@@ -246,8 +262,69 @@ public:
     }
 
     std::shared_ptr<Statement> parseFunctionDecl() {
+        auto oldPos = this->tokenizer.position();
+        auto t = this->tokenizer.next();
+        if (t.kind == TokenKind::Keyword && t.text == "function"){
+            t = this->tokenizer.next();
+            if (t.kind == TokenKind::Identifier){
+                //读取"("和")"
+                auto t1 = this->tokenizer.next();
+                if (t1.text=="("){
+                    auto t2 = this->tokenizer.next();
+                    if (t2.text==")") {
+                        auto functionBody = this->parseFunctionBody();
+                        if (functionBody != nullptr &&
+                            functionBody->getType() == AstNodeType::FunctionBody){
+                            //如果解析成功，从这里返回
+                            return std::make_shared<FunctionDecl>(t.text, functionBody);
+                        }
+                    }
+                    else{
+                        std::cout << ("Expecting ')' in FunctionDecl, while we got a " + t.text) << std::endl;
+                        return nullptr;
+                    }
+                }
+                else{
+                    std::cout << ("Expecting '(' in FunctionDecl, while we got a " + t.text) << std::endl;
+                    return nullptr;
+                }
+            }
+        }
+
+        //如果解析不成功，回溯，返回null。
+        this->tokenizer.traceBack(oldPos);
         return nullptr;
     }
+
+    std::shared_ptr<FunctionBody> parseFunctionBody() {
+        auto oldPos = this->tokenizer.position();
+        std::vector<std::shared_ptr<Statement>> stmts;
+        auto t = this->tokenizer.next();
+        if(t.text == "{"){
+            auto functionCall = this->parseFunctionCall();
+            while(functionCall != nullptr && functionCall->getType() == AstNodeType::FunctionCall){  //解析函数体
+                stmts.push_back(functionCall);
+                functionCall = this->parseFunctionCall();
+            }
+            t = this->tokenizer.next();
+            if (t.text == "}"){
+                return std::make_shared<FunctionBody>(stmts);
+            }
+            else{
+                std::cout << ("Expecting '}' in FunctionBody, while we got a " + t.text) << std::endl;
+                return nullptr;
+            }
+        }
+        else{
+            std::cout << ("Expecting '{' in FunctionBody, while we got a " + t.text) << std::endl;
+            return nullptr;
+        }
+
+        //如果解析不成功，回溯，返回null。
+        this->tokenizer.traceBack(oldPos);
+        return nullptr;
+    }
+
     std::shared_ptr<Statement> parseFunctionCall() {
         uint32_t oldPos = this->tokenizer.position();
         std::vector<std::string> params;
