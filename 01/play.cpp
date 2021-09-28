@@ -25,8 +25,9 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include <memory>
 
-using namespace std;
+//using namespace std;
 
 enum class TokenKind {Keyword, Identifier, StringLiteral, Seperator, Operator, Eof};
 std::unordered_map<TokenKind, std::string> tokenToString {
@@ -56,12 +57,13 @@ inline std::string toString(TokenKind kind) {
     return "Unknow";
 }
 
-ostream& operator<<(ostream& out, Token& token) {
+std::ostream& operator<<(std::ostream& out, Token& token) {
     out << "{ " << toString(token.kind) << " , " << token.text << " }";
     return out;
 }
 
-vector<Token> tokenArray = {
+/*
+std::vector<Token> tokenArray = {
     {TokenKind::Keyword,      "function"},
     {TokenKind::Identifier,   "sayHello"},
     {TokenKind::Seperator,    "("},
@@ -79,14 +81,28 @@ vector<Token> tokenArray = {
     {TokenKind::Seperator,    ";"},
     {TokenKind::Eof,          ""}
 };
+*/
+
+std::vector<Token> tokenArray = {
+    {TokenKind::Identifier,   "println"},
+    {TokenKind::Seperator,    "("},
+    {TokenKind::StringLiteral,"Hello World!"},
+    {TokenKind::Seperator,    ")"},
+    {TokenKind::Seperator,    ";"},
+    {TokenKind::Identifier,   "sayHello"},
+    {TokenKind::Seperator,    "("},
+    {TokenKind::Seperator,    ")"},
+    {TokenKind::Seperator,    ";"},
+    {TokenKind::Eof,          ""}
+};
 
 class Tokenizer{
 private:
-    vector<Token> tokens;
+    std::vector<Token> tokens;
     uint32_t pos = 0;
 
 public:
-    Tokenizer(const vector<Token>& tokens) {
+    Tokenizer(const std::vector<Token>& tokens) {
         this->tokens = tokens;
     }
     Token next() {
@@ -106,48 +122,190 @@ public:
     }
 };
 
+enum class AstNodeType {AstNode, Statement, Prog, FunctionCall, FunctionBody, FunctionDecl};
+
 class AstNode{
+protected:
+    AstNodeType type = AstNodeType::AstNode;
 public:
     //打印对象信息，prefix是前面填充的字符串，通常用于缩进显示
-    virtual void dump(string prefix) {};
+    virtual void dump(const std::string& prefix) {};
+    virtual AstNodeType getType() {return this->type;}
 };
 
 class Statement: public AstNode{
 public:
-    bool isStatementNode(const AstNode& node) {
-        return typeid(node)==typeid(Statement);
+    Statement() {
+        this->type = AstNodeType::Statement;
     }
 
-    void dump(string prefix) override {
+    void dump(const std::string& prefix) override {
         std::cout << (prefix+"Statement") << std::endl;
     }
 };
 
 class Prog: public AstNode{
 public:
-    vector<Statement> stmts; //程序中可以包含多个语句
-    Prog(vector<Statement> stmts){
+    std::vector<std::shared_ptr<Statement>> stmts; //程序中可以包含多个语句
+    Prog(std::vector<std::shared_ptr<Statement>> stmts){
         this->stmts = stmts;
+        this->type = AstNodeType::Prog;
     }
-    void dump(string prefix) override {
+    void dump(const std::string& prefix) override {
         std::cout << (prefix+"Prog") << std::endl;
-        std::for_each(stmts.begin(), stmts.end(), [prefix](auto& x) { x.dump(prefix+"\t");});
+        std::for_each(stmts.begin(), stmts.end(), [prefix](auto& x) { x->dump(prefix+"\t");});
     }
+};
+
+/**
+ * 函数调用
+ */
+struct FunctionDecl;
+class FunctionCall: public Statement{
+public:
+    std::string name;
+    std::vector<std::string> parameters;
+    std::shared_ptr<FunctionDecl> definition = nullptr;  //指向函数的声明
+    FunctionCall(std::string name, const std::vector<std::string>& parameters){
+        this->name = name;
+        this->parameters = parameters;
+        this->type = AstNodeType::FunctionCall;
+    }
+
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"FunctionCall "+this->name + (this->definition!=nullptr ? ", resolved" : ", not resolved")) << std::endl;
+        std::for_each(parameters.begin(), parameters.end(), [prefix](auto& x) {
+            std::cout << (prefix+"\t"+"Parameter: "+ x) << std::endl;
+        });
+    }
+};
+
+class FunctionBody: public AstNode{
+public:
+    std::vector<std::shared_ptr<Statement>> stmts;
+    FunctionBody(std::vector<std::shared_ptr<Statement>> stmts){
+        this->stmts = stmts;
+        this->type = AstNodeType::FunctionBody;
+    }
+
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"FunctionBody") << std::endl;
+        std::for_each(stmts.begin(), stmts.end(), [prefix](auto& x) { x->dump(prefix+"\t");});
+    }
+};
+
+class FunctionDecl: public Statement{
+public:
+    std::string name;       //函数名称
+    std::shared_ptr<FunctionBody> body; //函数体
+    FunctionDecl(std::string name, std::shared_ptr<FunctionBody> body){
+        this->name = name;
+        this->body = body;
+        this->type = AstNodeType::FunctionDecl;
+    }
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"FunctionDecl "+this->name) << std::endl;
+        this->body->dump(prefix+"\t");
+    }
+};
+
+class Parser{
+    Tokenizer& tokenizer;
+public:
+    Parser(Tokenizer& tokenizer): tokenizer(tokenizer) {}
+    /**
+     * 解析Prog
+     * 语法规则：
+     * prog = (functionDecl | functionCall)* ;
+     */
+    std::shared_ptr<Prog> parseProg(){
+
+        std::vector<std::shared_ptr<Statement>> stmts;
+        std::shared_ptr<Statement> stmt;
+        while(true){  //每次循环解析一个语句
+            //尝试一下函数声明
+            stmt = this->parseFunctionDecl();
+            if (stmt != nullptr && stmt->getType() == AstNodeType::FunctionDecl){
+                stmts.push_back(stmt);
+                continue;
+            }
+
+            //如果前一个尝试不成功，那么再尝试一下函数调用
+            stmt = this->parseFunctionCall();
+            if (stmt != nullptr && stmt->getType() == AstNodeType::FunctionCall){
+                stmts.push_back(stmt);
+                continue;
+            }
+
+            //如果都没成功，那就结束
+            if (stmt == nullptr){
+                break;
+            }
+        }
+        return std::make_shared<Prog>(stmts);
+    }
+
+    std::shared_ptr<Statement> parseFunctionDecl() {
+        return nullptr;
+    }
+    std::shared_ptr<Statement> parseFunctionCall() {
+        uint32_t oldPos = this->tokenizer.position();
+        std::vector<std::string> params;
+        auto t = this->tokenizer.next();
+        if(t.kind == TokenKind::Identifier){
+            auto t1 = this->tokenizer.next();
+            if (t1.text == "("){
+                auto t2 = this->tokenizer.next();
+                //循环，读出所有
+                while(t2.text != ")"){
+                    if (t2.kind == TokenKind::StringLiteral){
+                        params.push_back(t2.text);
+                    }
+                    else{
+                        std::cout<< ("Expecting parameter in FunctionCall, while we got a " + t2.text) << std::endl;
+                        return nullptr;  //出错时，就不在错误处回溯了。
+                    }
+                    t2 = this->tokenizer.next();
+                    if (t2.text != ")"){
+                        if (t2.text == ","){
+                            t2 = this->tokenizer.next();
+                        }
+                        else{
+                            std::cout << ("Expecting a comma in FunctionCall, while we got a " + t2.text) << std::endl;
+                            return nullptr;
+                        }
+                    }
+                }
+                //消化掉一个分号：;
+                t2 = this->tokenizer.next();
+                if (t2.text == ";"){
+                    return std::make_shared<FunctionCall>(t.text, params);
+                }
+                else{
+                    std::cout << ("Expecting a comma in FunctionCall, while we got a " + t2.text) << std::endl;
+                    return nullptr;
+                }
+            }
+        }
+        //如果解析不成功，回溯，返回null。
+        this->tokenizer.traceBack(oldPos);
+        return nullptr;
+    }
+
+
 };
 
 int main() {
     //词法分析
-    auto tokenizer = new Tokenizer(tokenArray);
-    cout << "program start use tokens" << endl;
+    Tokenizer tokenizer(tokenArray);
+    std::cout << "program start use tokens" << std::endl;
 
     for (auto& token: tokenArray) {
-        cout << token << endl;
+        std::cout << token << std::endl;
     }
 
-    AstNode a;
-    Statement s;
-    cout << s.isStatementNode(a) << endl;
-    cout << s.isStatementNode(s) << endl;
+    auto prog = Parser(tokenizer).parseProg();
+    prog->dump("");
 
     return 0;
 }
