@@ -21,6 +21,8 @@
 // SOFTWARE.
 #include <stdint.h>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -461,25 +463,52 @@ public:
     }
 };
 
-int main() {
-    //词法分析
-    Tokenizer tokenizer(tokenArray);
-    std::cout << "program start use tokens" << std::endl;
+void compileAndRun(const std::string& program) {
 
-    for (auto& token: tokenArray) {
-        std::cout << token << std::endl;
+    // Tokenizer tokenizer(tokenArray);
+    // std::cout << "program start use tokens" << std::endl;
+
+    // for (auto& token: tokenArray) {
+        // std::cout << token << std::endl;
+    // }
+
+    // std::cout << "ast after parser: " << std::endl;
+    // auto prog = Parser(tokenizer).parseProg();
+    // prog->dump("");
+
+    // std::cout << "ast after resolved: " << std::endl;
+    // RefResolver().visitProg(prog);
+    // prog->dump("");
+
+    // std::cout << "run prog: " << std::endl;
+    // Intepretor().visitProg(prog);
+}
+
+static std::string ReadFile(const std::string& filename) {
+    std::ifstream ifile(filename.c_str());
+    if (!ifile.is_open()) {
+        std::cout << "Open file: [" << filename << "] failed." << std::endl;
+        return "";
     }
 
-    std::cout << "ast after parser: " << std::endl;
-    auto prog = Parser(tokenizer).parseProg();
-    prog->dump("");
+    std::ostringstream buf;
+    char ch;
+    while (buf && ifile.get(ch)) {
+        buf.put(ch);
+    }
+    ifile.close();
+    return buf.str();
+}
 
-    std::cout << "ast after resolved: " << std::endl;
-    RefResolver().visitProg(prog);
-    prog->dump("");
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+         std::cout << (std::string("Usage: ") + argv[0] + " FILENAME");
+         return 0;
+    }
 
-    std::cout << "run prog: " << std::endl;
-    Intepretor().visitProg(prog);
+    std::string program = ReadFile(argv[1]);
+    std::cout << ("source code:") << std::endl;
+    std::cout << (program) << std::endl;
 
     return 0;
 }
