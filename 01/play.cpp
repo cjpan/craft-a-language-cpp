@@ -372,6 +372,69 @@ public:
 
 };
 
+class AstVisitor{
+public:
+    virtual void visitProg(std::shared_ptr<Prog>& prog) = 0;
+
+    virtual void visitFunctionDecl(std::shared_ptr<FunctionDecl> functionDecl) {
+        return this->visitFunctionBody(functionDecl->body);
+    }
+    virtual void visitFunctionBody(std::shared_ptr<FunctionBody> functionBody) = 0;
+
+};
+
+class RefResolver: public AstVisitor{
+    std::shared_ptr<Prog> prog;
+public:
+    void visitProg(std::shared_ptr<Prog>& prog) override {
+        this->prog = prog;
+        for(auto x: prog->stmts){
+            auto type = x->getType();
+            if (type == AstNodeType::FunctionCall){
+                std::cout << "AstNodeType::FunctionCall" << std::endl;
+                auto functionCall = std::dynamic_pointer_cast<FunctionCall>(x);
+                this->resolveFunctionCall(prog, functionCall);
+            } else if (type == AstNodeType::FunctionDecl) {
+                std::cout << "AstNodeType::FunctionDecl" << std::endl;
+                auto functionDecl = std::dynamic_pointer_cast<FunctionDecl>(x);
+                this->visitFunctionDecl(functionDecl);
+            }
+        }
+    }
+
+    void visitFunctionBody(std::shared_ptr<FunctionBody> functionBody) override {
+        if(this->prog != nullptr){
+            for(auto x: functionBody->stmts){
+                auto functionCall = std::dynamic_pointer_cast<FunctionCall>(x);
+                return this->resolveFunctionCall(this->prog, functionCall);
+            }
+        }
+    }
+
+    void resolveFunctionCall(std::shared_ptr<Prog>& prog, std::shared_ptr<FunctionCall> functionCall) {
+        auto functionDecl = this->findFunctionDecl(prog, functionCall->name);
+        if (functionDecl != nullptr){
+            functionCall->definition = functionDecl;
+        } else{
+            if (functionCall->name != "println"){  //系统内置函数不用报错
+                std::cout << ("Error: cannot find definition of function " + functionCall->name) << std::endl;
+            }
+        }
+    }
+
+    std::shared_ptr<FunctionDecl> findFunctionDecl(std::shared_ptr<Prog>& prog, std::string name) {
+        for(auto x: prog->stmts){
+            if (x->getType() == AstNodeType::FunctionDecl) {
+                auto functionDecl = std::dynamic_pointer_cast<FunctionDecl>(x);
+                if (functionDecl != nullptr && functionDecl->name == name) {
+                    return functionDecl;
+                }
+            }
+        }
+        return nullptr;
+    }
+};
+
 int main() {
     //词法分析
     Tokenizer tokenizer(tokenArray);
@@ -381,7 +444,12 @@ int main() {
         std::cout << token << std::endl;
     }
 
+    std::cout << "ast after parser: " << std::endl;
     auto prog = Parser(tokenizer).parseProg();
+    prog->dump("");
+
+    std::cout << "ast after resolved: " << std::endl;
+    RefResolver().visitProg(prog);
     prog->dump("");
 
     return 0;
