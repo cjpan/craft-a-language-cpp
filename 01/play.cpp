@@ -27,8 +27,6 @@
 #include <algorithm>
 #include <memory>
 
-//using namespace std;
-
 enum class TokenKind {Keyword, Identifier, StringLiteral, Seperator, Operator, Eof};
 std::unordered_map<TokenKind, std::string> tokenToString {
     {TokenKind::Keyword, "Keyword"},
@@ -61,7 +59,6 @@ std::ostream& operator<<(std::ostream& out, Token& token) {
     out << "{ " << toString(token.kind) << " , " << token.text << " }";
     return out;
 }
-
 
 std::vector<Token> tokenArray = {
     {TokenKind::Keyword,      "function"},
@@ -278,13 +275,11 @@ public:
                             //如果解析成功，从这里返回
                             return std::make_shared<FunctionDecl>(t.text, functionBody);
                         }
-                    }
-                    else{
+                    } else{
                         std::cout << ("Expecting ')' in FunctionDecl, while we got a " + t.text) << std::endl;
                         return nullptr;
                     }
-                }
-                else{
+                } else{
                     std::cout << ("Expecting '(' in FunctionDecl, while we got a " + t.text) << std::endl;
                     return nullptr;
                 }
@@ -314,8 +309,7 @@ public:
                 std::cout << ("Expecting '}' in FunctionBody, while we got a " + t.text) << std::endl;
                 return nullptr;
             }
-        }
-        else{
+        } else{
             std::cout << ("Expecting '{' in FunctionBody, while we got a " + t.text) << std::endl;
             return nullptr;
         }
@@ -337,8 +331,7 @@ public:
                 while(t2.text != ")"){
                     if (t2.kind == TokenKind::StringLiteral){
                         params.push_back(t2.text);
-                    }
-                    else{
+                    } else{
                         std::cout<< ("Expecting parameter in FunctionCall, while we got a " + t2.text) << std::endl;
                         return nullptr;  //出错时，就不在错误处回溯了。
                     }
@@ -346,8 +339,7 @@ public:
                     if (t2.text != ")"){
                         if (t2.text == ","){
                             t2 = this->tokenizer.next();
-                        }
-                        else{
+                        } else{
                             std::cout << ("Expecting a comma in FunctionCall, while we got a " + t2.text) << std::endl;
                             return nullptr;
                         }
@@ -357,8 +349,7 @@ public:
                 t2 = this->tokenizer.next();
                 if (t2.text == ";"){
                     return std::make_shared<FunctionCall>(t.text, params);
-                }
-                else{
+                } else{
                     std::cout << ("Expecting a comma in FunctionCall, while we got a " + t2.text) << std::endl;
                     return nullptr;
                 }
@@ -368,8 +359,6 @@ public:
         this->tokenizer.traceBack(oldPos);
         return nullptr;
     }
-
-
 };
 
 class AstVisitor{
@@ -415,7 +404,7 @@ public:
         auto functionDecl = this->findFunctionDecl(prog, functionCall->name);
         if (functionDecl != nullptr){
             functionCall->definition = functionDecl;
-        } else{
+        } else {
             if (functionCall->name != "println"){  //系统内置函数不用报错
                 std::cout << ("Error: cannot find definition of function " + functionCall->name) << std::endl;
             }
