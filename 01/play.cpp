@@ -435,6 +435,43 @@ public:
     }
 };
 
+class Intepretor: public AstVisitor{
+public:
+    void visitProg(std::shared_ptr<Prog>& prog) override {
+        for(auto x: prog->stmts){
+            if (x->getType() == AstNodeType::FunctionCall) {
+                auto functionCall = std::dynamic_pointer_cast<FunctionCall>(x);
+                this->runFunction(functionCall);
+            }
+        };
+    }
+
+    void visitFunctionBody(std::shared_ptr<FunctionBody> functionBody) override {
+        for(auto x: functionBody->stmts){
+            if (x->getType() == AstNodeType::FunctionCall) {
+                auto functionCall = std::dynamic_pointer_cast<FunctionCall>(x);
+                std::cout << ("visitFunctionBody.stmts: " + functionCall->name) << std::endl;
+                this->runFunction(functionCall);
+            }
+        };
+    }
+
+    void runFunction(std::shared_ptr<FunctionCall> functionCall){
+        if (functionCall->name == "println") { //内置函数
+            if(!functionCall->parameters.empty()) {
+                for (auto s: functionCall->parameters) {
+                    std::cout << s;
+                }
+            }
+            std::cout << std::endl;
+        } else{ //找到函数定义，继续遍历函数体
+            if (functionCall->definition != nullptr){
+                this->visitFunctionBody(functionCall->definition->body);
+            }
+        }
+    }
+};
+
 int main() {
     //词法分析
     Tokenizer tokenizer(tokenArray);
@@ -451,6 +488,9 @@ int main() {
     std::cout << "ast after resolved: " << std::endl;
     RefResolver().visitProg(prog);
     prog->dump("");
+
+    std::cout << "run prog: " << std::endl;
+    Intepretor().visitProg(prog);
 
     return 0;
 }
