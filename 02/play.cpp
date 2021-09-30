@@ -62,78 +62,244 @@ std::ostream& operator<<(std::ostream& out, Token& token) {
     return out;
 }
 
-std::vector<Token> tokenArray = {
-    {TokenKind::Keyword,      "function"},
-    {TokenKind::Identifier,   "sayHello"},
-    {TokenKind::Seperator,    "("},
-    {TokenKind::Seperator,    ")"},
-    {TokenKind::Seperator,    "{"},
-    {TokenKind::Identifier,   "println"},
-    {TokenKind::Seperator,    "("},
-    {TokenKind::StringLiteral,"Hello World!"},
-    {TokenKind::Seperator,    ")"},
-    {TokenKind::Seperator,    ";"},
-    {TokenKind::Seperator,    "}"},
-    {TokenKind::Identifier,   "sayHello"},
-    {TokenKind::Seperator,    "("},
-    {TokenKind::Seperator,    ")"},
-    {TokenKind::Seperator,    ";"},
-    {TokenKind::Eof,          ""}
+
+class CharStream{
+public:
+    std::string data;
+    uint32_t pos = 0;
+    uint32_t line = 1;
+	uint32_t col = 0;
+
+
+    CharStream(const std::string& data): data(data) {}
+    char peek() {
+        return this->data[this->pos];
+    }
+    char next() {
+        char ch = this->data[this->pos++];
+        if(ch == '\n') {
+            this->line ++;
+            this->col = 0;
+        }else {
+            this->col ++;
+        }
+        return ch;
+    }
+    bool eof() {
+        return this->peek() == '\0';
+    }
 };
-/*
-// test for FunctionCall
-std::vector<Token> tokenArray = {
-    {TokenKind::Identifier,   "println"},
-    {TokenKind::Seperator,    "("},
-    {TokenKind::StringLiteral,"Hello World!"},
-    {TokenKind::Seperator,    ")"},
-    {TokenKind::Seperator,    ";"},
-    {TokenKind::Identifier,   "sayHello"},
-    {TokenKind::Seperator,    "("},
-    {TokenKind::Seperator,    ")"},
-    {TokenKind::Seperator,    ";"},
-    {TokenKind::Eof,          ""}
-};
-// test for functionDecl
-std::vector<Token> tokenArray = {
-    {TokenKind::Keyword,      "function"},
-    {TokenKind::Identifier,   "sayHello"},
-    {TokenKind::Seperator,    "("},
-    {TokenKind::Seperator,    ")"},
-    {TokenKind::Seperator,    "{"},
-    {TokenKind::Identifier,   "println"},
-    {TokenKind::Seperator,    "("},
-    {TokenKind::StringLiteral,"Hello World!"},
-    {TokenKind::Seperator,    ")"},
-    {TokenKind::Seperator,    ";"},
-    {TokenKind::Seperator,    "}"},
-    {TokenKind::Eof,          ""}
-};
-*/
+
 
 class Tokenizer{
 private:
-    std::vector<Token> tokens;
-    uint32_t pos = 0;
-
+    CharStream& stream;
+    Token nextToken{TokenKind::Eof,  ""};
 public:
-    Tokenizer(const std::vector<Token>& tokens) {
-        this->tokens = tokens;
-    }
+    Tokenizer(CharStream& stream) : stream(stream){}
     Token next() {
-        if (this->pos <= this->tokens.size()){
-            return this->tokens[this->pos++];
+        //在第一次的时候，先parse一个Token
+        if(this->nextToken.kind == TokenKind::Eof && !this->stream.eof()){
+            this->nextToken = this->getAToken();
+        }
+        auto lastToken = this->nextToken;
+
+        //往前走一个Token
+        this->nextToken = this->getAToken();
+        return lastToken;
+    }
+
+    Token peek() {
+        if (this->nextToken.kind == TokenKind::Eof && !this->stream.eof()){
+            this->nextToken = this->getAToken();
+        }
+        return this->nextToken;
+    }
+
+
+
+
+private:
+    //从字符串流中获取一个新Token。
+    Token getAToken() {
+        this->skipWhiteSpaces();
+        if (this->stream.eof()){
+            return {TokenKind::Eof,  ""};
         }
         else{
-            //如果已经到了末尾，总是返回EOF
-            return this->tokens[this->pos];
+            auto ch = this->stream.peek();
+            if (this->isLetter(ch) || this->isDigit(ch)){
+                return this->parseIdentifer();
+            }
+            else if (ch == '"'){
+                return this->parseStringLiteral();
+            }
+            else if (ch == '(' || ch == ')' || ch == '{' ||
+                     ch == '}' || ch == ';' || ch == ','){
+                this->stream.next();
+                return {TokenKind::Seperator, std::string(1, ch)};
+            }
+            else if (ch == '/'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '*'){
+                    this->skipMultipleLineComments();
+                    return this->getAToken();
+                }
+                else if (ch1 == '/'){
+                    this->skipSingleLineComment();
+                    return this->getAToken();
+                }
+                else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "/="};
+                }
+                else{
+                    return {TokenKind::Operator, "/"};
+                }
+            }
+            else if (ch == '+'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '+'){
+                    this->stream.next();
+                    return {TokenKind::Operator, "++"};
+                }else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "+="};
+                }
+                else{
+                    return {TokenKind::Operator, "+"};
+                }
+            }
+            else if (ch == '-'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '-'){
+                    this->stream.next();
+                    return {TokenKind::Operator, "--"};
+                }else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "-="};
+                }
+                else{
+                    return {TokenKind::Operator, "-"};
+                }
+            }
+            else if (ch == '*'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "*="};
+                }
+                else{
+                    return {TokenKind::Operator, "*"};
+                }
+            }
+            else{
+                //暂时去掉不能识别的字符
+                std::cout << ("Unrecognized pattern meeting ': " + std::to_string(ch) +"', at" + toString(this->stream.line) + " col: " + toString(this->stream.col)) << std::endl;
+                this->stream.next();
+                return this->getAToken();
+            }
         }
     }
-    uint32_t position() {
-        return this->pos;
+
+    void skipSingleLineComment(){
+        //跳过第二个/，第一个之前已经跳过去了。
+        this->stream.next();
+
+        //往后一直找到回车或者eof
+        while(this->stream.peek() !='\n' && !this->stream.eof()){
+            this->stream.next();
+        }
     }
-    void traceBack(uint32_t newPos){
-        this->pos = newPos;
+
+    void skipMultipleLineComments(){
+        //跳过*，/之前已经跳过去了。
+        this->stream.next();
+
+        if (!this->stream.eof()){
+            auto ch1 = this->stream.next();
+            //往后一直找到回车或者eof
+            while(!this->stream.eof()){
+                auto ch2 = this->stream.next();
+                if (ch1 == '*' && ch2 == '/'){
+                    return;
+                }
+                ch1 = ch2;
+            }
+        }
+
+        //如果没有匹配上，报错。
+        std::cout << ("Failed to find matching */ for multiple line comments at ': " + toString(this->stream.line) + " col: " + toString(this->stream.col)) << std::endl;
+    }
+
+    void skipWhiteSpaces(){
+        while (this->isWhiteSpace(this->stream.peek())){
+            this->stream.next();
+        }
+    }
+
+    Token parseStringLiteral() {
+        Token token {TokenKind::StringLiteral, ""};
+
+        //第一个字符不用判断，因为在调用者那里已经判断过了
+        this->stream.next();
+
+        while(!this->stream.eof() && this->stream.peek() !='"'){
+            token.text.push_back(this->stream.next());
+        }
+
+        if(this->stream.peek()=='"'){
+            //消化掉字符换末尾的引号
+            this->stream.next();
+        }
+        else{
+            std::cout << ("Expecting an \" at line: " + toString(this->stream.line) + " col: " + toString(this->stream.col)) << std::endl;
+        }
+
+        return token;
+    }
+
+    Token parseIdentifer() {
+        Token token = {TokenKind::Identifier,  ""};
+
+        //第一个字符不用判断，因为在调用者那里已经判断过了
+        token.text.push_back(this->stream.next());
+
+        //读入后序字符
+        while(!this->stream.eof() &&
+                this->isLetterDigitOrUnderScore(this->stream.peek())){
+            token.text.push_back(this->stream.next());
+        }
+
+        //识别出关键字
+        if (token.text == "function"){
+            token.kind = TokenKind::Keyword;
+        }
+
+        return token;
+    }
+
+    bool isLetterDigitOrUnderScore(char ch) {
+        return (ch>='A' && ch<='Z' ||
+                ch>='a' && ch<='z' ||
+                ch>='0' && ch<='9' ||
+                ch== '_');
+    }
+
+    bool isLetter(char ch) {
+        return (ch>='A' && ch <='Z' || ch>= 'a' && ch <='z');
+    }
+
+    bool isDigit(char ch) {
+        return (ch>='0' && ch <='9');
+    }
+
+    bool isWhiteSpace(char ch){
+        return (ch == ' ' || ch == '\n' || ch== '\t');
     }
 };
 
@@ -237,72 +403,82 @@ public:
 
         std::vector<std::shared_ptr<Statement>> stmts;
         std::shared_ptr<Statement> stmt;
-        while(true){  //每次循环解析一个语句
-            //尝试一下函数声明
-            stmt = this->parseFunctionDecl();
-            if (stmt != nullptr && stmt->getType() == AstNodeType::FunctionDecl){
-                stmts.push_back(stmt);
-                continue;
+        auto token = this->tokenizer.peek();
+
+
+        while(token.kind != TokenKind::Eof){
+            if (token.kind == TokenKind::Keyword && token.text =="function"){
+                stmt = this->parseFunctionDecl();
+            }
+            else if (token.kind == TokenKind::Identifier){
+                stmt = this->parseFunctionCall();
             }
 
-            //如果前一个尝试不成功，那么再尝试一下函数调用
-            stmt = this->parseFunctionCall();
-            if (stmt != nullptr && stmt->getType() == AstNodeType::FunctionCall){
+            if (stmt != nullptr){
                 stmts.push_back(stmt);
-                continue;
+                std::cout << ("success") << std::endl;
             }
-
-            //如果都没成功，那就结束
-            if (stmt == nullptr){
-                break;
+            else{
+                std::cout << ("Unrecognized token: ") << std::endl;
+                std::cout << (token) << std::endl;
             }
+            token = this->tokenizer.peek();
         }
+
         return std::make_shared<Prog>(stmts);
     }
 
     std::shared_ptr<Statement> parseFunctionDecl() {
-        auto oldPos = this->tokenizer.position();
+        //跳过关键字'function'
+        this->tokenizer.next();
+
         auto t = this->tokenizer.next();
-        if (t.kind == TokenKind::Keyword && t.text == "function"){
-            t = this->tokenizer.next();
-            if (t.kind == TokenKind::Identifier){
-                //读取"("和")"
-                auto t1 = this->tokenizer.next();
-                if (t1.text=="("){
-                    auto t2 = this->tokenizer.next();
-                    if (t2.text==")") {
-                        auto functionBody = this->parseFunctionBody();
-                        if (functionBody != nullptr &&
-                            functionBody->getType() == AstNodeType::FunctionBody){
-                            //如果解析成功，从这里返回
-                            return std::make_shared<FunctionDecl>(t.text, functionBody);
-                        }
-                    } else{
-                        std::cout << ("Expecting ')' in FunctionDecl, while we got a " + t.text) << std::endl;
+        if (t.kind == TokenKind::Identifier) {
+            //读取"("和")"
+            auto t1 = this->tokenizer.next();
+            if (t1.text=="("){
+                auto t2 = this->tokenizer.next();
+                if (t2.text==")") {
+                    auto functionBody = this->parseFunctionBody();
+                    if (functionBody != nullptr &&
+                        functionBody->getType() == AstNodeType::FunctionBody){
+                        //如果解析成功，从这里返回
+                        return std::make_shared<FunctionDecl>(t.text, functionBody);
+                    } else {
+                        std::cout << ("Error parsing FunctionBody in FunctionDecl") << std::endl;
                         return nullptr;
                     }
                 } else{
-                    std::cout << ("Expecting '(' in FunctionDecl, while we got a " + t.text) << std::endl;
+                    std::cout << ("Expecting ')' in FunctionDecl, while we got a " + t.text) << std::endl;
                     return nullptr;
                 }
+            } else{
+                std::cout << ("Expecting '(' in FunctionDecl, while we got a " + t.text) << std::endl;
+                return nullptr;
             }
+        } else {
+            std::cout << ("Expecting a function name, while we got a " + t.text) << std::endl;
+            return nullptr;
         }
 
-        //如果解析不成功，回溯，返回null。
-        this->tokenizer.traceBack(oldPos);
         return nullptr;
     }
 
     std::shared_ptr<FunctionBody> parseFunctionBody() {
-        auto oldPos = this->tokenizer.position();
         std::vector<std::shared_ptr<Statement>> stmts;
         auto t = this->tokenizer.next();
         if(t.text == "{"){
-            auto functionCall = this->parseFunctionCall();
-            while(functionCall != nullptr && functionCall->getType() == AstNodeType::FunctionCall){  //解析函数体
-                stmts.push_back(functionCall);
-                functionCall = this->parseFunctionCall();
+            while(this->tokenizer.peek().kind == TokenKind::Identifier){
+                auto functionCall = this->parseFunctionCall();
+                if (functionCall != nullptr && functionCall->getType() == AstNodeType::FunctionCall){
+                   stmts.push_back(functionCall);
+                }
+                else{
+                    std::cout << ("Error parsing a FunctionCall in FunctionBody.") << std::endl;
+                    return nullptr;
+                }
             }
+
             t = this->tokenizer.next();
             if (t.text == "}"){
                 return std::make_shared<FunctionBody>(stmts);
@@ -316,13 +492,10 @@ public:
             return nullptr;
         }
 
-        //如果解析不成功，回溯，返回null。
-        this->tokenizer.traceBack(oldPos);
         return nullptr;
     }
 
     std::shared_ptr<Statement> parseFunctionCall() {
-        uint32_t oldPos = this->tokenizer.position();
         std::vector<std::string> params;
         auto t = this->tokenizer.next();
         if(t.kind == TokenKind::Identifier){
@@ -357,8 +530,6 @@ public:
                 }
             }
         }
-        //如果解析不成功，回溯，返回null。
-        this->tokenizer.traceBack(oldPos);
         return nullptr;
     }
 };
@@ -464,25 +635,32 @@ public:
 };
 
 void compileAndRun(const std::string& program) {
+    {
+        CharStream charStream(program);
+        Tokenizer tokenizer(charStream);
+        while(tokenizer.peek().kind!=TokenKind::Eof){
+            auto t = tokenizer.next();
+            std::cout << t << std::endl;
+        }
+    }
 
-    // Tokenizer tokenizer(tokenArray);
-    // std::cout << "program start use tokens" << std::endl;
 
-    // for (auto& token: tokenArray) {
-        // std::cout << token << std::endl;
-    // }
+    std::cout << "program start use tokens" << std::endl;
+    CharStream charStream(program);
+    Tokenizer tokenizer(charStream);
 
-    // std::cout << "ast after parser: " << std::endl;
-    // auto prog = Parser(tokenizer).parseProg();
-    // prog->dump("");
+    std::cout << "ast after parser: " << std::endl;
+    auto prog = Parser(tokenizer).parseProg();
+    prog->dump("");
 
-    // std::cout << "ast after resolved: " << std::endl;
-    // RefResolver().visitProg(prog);
-    // prog->dump("");
+    std::cout << "ast after resolved: " << std::endl;
+    RefResolver().visitProg(prog);
+    prog->dump("");
 
-    // std::cout << "run prog: " << std::endl;
-    // Intepretor().visitProg(prog);
+    std::cout << "run prog: " << std::endl;
+    Intepretor().visitProg(prog);
 }
+
 
 static std::string ReadFile(const std::string& filename) {
     std::ifstream ifile(filename.c_str());
@@ -509,6 +687,8 @@ int main(int argc, char* argv[]) {
     std::string program = ReadFile(argv[1]);
     std::cout << ("source code:") << std::endl;
     std::cout << (program) << std::endl;
+
+    compileAndRun(program);
 
     return 0;
 }
