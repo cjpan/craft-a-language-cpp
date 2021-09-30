@@ -10,7 +10,7 @@
 
 #### 安装教程
 ##### 单一源文件
-1. 编译： g++ play.cpp -o play
+1. 编译： g++ play.cpp -std=c++17 -o play
 2. 执行： ./play program.cc
 
 ##### 多个源文件
