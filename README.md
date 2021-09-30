@@ -9,8 +9,14 @@
 
 
 #### 安装教程
-1. g++ play.cpp
+##### 单一源文件
+1. 编译： g++ play.cpp -o play
+2. 执行： ./play program.cc
 
+##### 多个源文件
+cmake编译
+1. mkdir build && cd build && cmake ..
+2. make
 
 #### 使用说明
-无
+请购买正版极客时间《手把手带你写一门计算机语言》课程，支持宫文学老师
