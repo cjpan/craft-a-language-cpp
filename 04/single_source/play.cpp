@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <list>
 #include <unordered_map>
 #include <algorithm>
 #include <memory>
@@ -97,31 +98,59 @@ public:
 
 class Scanner {
 private:
-    Token nextToken{TokenKind::Eof,  ""};
-    std::vector<Token> tokens;
+    std::list<Token> tokens;
     CharStream& stream;
+
+    std::set<std::string> KeyWords
+        {
+            "function", "class",     "break",       "delete",    "return",
+            "case",      "do",        "if",          "switch",    "var",
+            "catch",     "else",      "in",          "this",      "void",
+            "continue",  "false",     "instanceof",  "throw",     "while",
+            "debugger",  "finally",   "new",         "true",      "with",
+            "default",   "for",       "null",        "try",       "typeof",
+            //下面这些用于严格模式
+            "implements","let",       "private",     "public",    "yield",
+            "interface", "package",   "protected",   "static"
+        };
+
 public:
     Scanner(CharStream& stream) : stream(stream){}
     Token next() {
-        //在第一次的时候，先parse一个Token
-        if(this->nextToken.kind == TokenKind::Eof && !this->stream.eof()){
-            this->nextToken = this->getAToken();
+        if (this->tokens.empty()) {
+            return this->getAToken();
+        } else {
+            auto t = this->tokens.front();
+            this->tokens.pop_front();
+            return t;
         }
-        auto lastToken = this->nextToken;
-
-        //往前走一个Token
-        this->nextToken = this->getAToken();
-        return lastToken;
     }
 
     Token peek() {
-        if (this->nextToken.kind == TokenKind::Eof && !this->stream.eof()){
-            this->nextToken = this->getAToken();
+        if (this->tokens.empty()) {
+            auto t = this->getAToken();
+            this->tokens.push_back(t);
+            return t;
+        } else {
+            auto t = this->tokens.front();
+            return t;
         }
-        return this->nextToken;
     }
 
+    Token peek2() {
+        while (this->tokens.size() < 2) {
+            auto t = this->getAToken();
+            this->tokens.push_back(t);
+        }
 
+        if (this->tokens.size() < 2) {
+            return Token{TokenKind::Eof, text:""};
+        }
+
+        auto it = this->tokens.begin();
+        std::advance(it, 1);
+        return *it;
+    }
 
 
 private:
@@ -310,17 +339,22 @@ private:
 
 
 void compileAndRun(const std::string& program) {
-/*
+
     {
         CharStream charStream(program);
-        Tokenizer tokenizer(charStream);
+        Scanner tokenizer(charStream);
         while(tokenizer.peek().kind!=TokenKind::Eof){
-            auto t = tokenizer.next();
-            std::cout << t << std::endl;
+
+            auto peek = tokenizer.peek();
+            auto peek2 = tokenizer.peek2();
+            auto next = tokenizer.next();
+            std::cout << "peek:" << peek << std::endl;
+            std::cout << "peek2:" << peek2 << std::endl;
+            //std::cout << "next:" << next << std::endl;
         }
     }
 
-
+/*
     std::cout << "program start use tokens" << std::endl;
     CharStream charStream(program);
     Tokenizer tokenizer(charStream);
