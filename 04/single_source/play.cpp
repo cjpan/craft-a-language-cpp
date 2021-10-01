@@ -25,10 +25,288 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <set>
 #include <unordered_map>
 #include <algorithm>
 #include <memory>
 
+enum class TokenKind {Keyword, Identifier, StringLiteral, IntegerLiteral, DecimalLiteral, NullLiteral, BooleanLiteral, Seperator, Operator, Eof};
+
+std::unordered_map<TokenKind, std::string> tokenToString {
+    {TokenKind::Keyword, "Keyword"},
+    {TokenKind::Identifier, "Identifier"},
+    {TokenKind::StringLiteral, "StringLiteral"},
+    {TokenKind::IntegerLiteral, "IntegerLiteral"},
+    {TokenKind::DecimalLiteral, "DecimalLiteral"},
+    {TokenKind::NullLiteral, "NullLiteral"},
+    {TokenKind::BooleanLiteral, "BooleanLiteral"},
+    {TokenKind::Seperator, "Seperator"},
+    {TokenKind::Operator, "Operator"},
+    {TokenKind::Eof, "Eof"},
+};
+
+struct Token{
+    TokenKind kind;
+    std::string text;
+};
+
+inline std::string toString(uint32_t obj) {
+    return std::to_string(obj);
+}
+
+inline std::string toString(TokenKind kind) {
+    auto it = tokenToString.find(kind);
+    if (it != tokenToString.end()) {
+        return it->second;
+    }
+
+    return "Unknow";
+}
+
+std::ostream& operator<<(std::ostream& out, Token& token) {
+    out << "{ " << toString(token.kind) << " , " << token.text << " }";
+    return out;
+}
+
+class CharStream{
+public:
+    std::string data;
+    uint32_t pos = 0;
+    uint32_t line = 1;
+	uint32_t col = 0;
+
+
+    CharStream(const std::string& data): data(data) {}
+    char peek() {
+        return this->data[this->pos];
+    }
+    char next() {
+        char ch = this->data[this->pos++];
+        if(ch == '\n') {
+            this->line ++;
+            this->col = 0;
+        }else {
+            this->col ++;
+        }
+        return ch;
+    }
+    bool eof() {
+        return this->peek() == '\0';
+    }
+};
+
+class Scanner {
+private:
+    Token nextToken{TokenKind::Eof,  ""};
+    std::vector<Token> tokens;
+    CharStream& stream;
+public:
+    Scanner(CharStream& stream) : stream(stream){}
+    Token next() {
+        //在第一次的时候，先parse一个Token
+        if(this->nextToken.kind == TokenKind::Eof && !this->stream.eof()){
+            this->nextToken = this->getAToken();
+        }
+        auto lastToken = this->nextToken;
+
+        //往前走一个Token
+        this->nextToken = this->getAToken();
+        return lastToken;
+    }
+
+    Token peek() {
+        if (this->nextToken.kind == TokenKind::Eof && !this->stream.eof()){
+            this->nextToken = this->getAToken();
+        }
+        return this->nextToken;
+    }
+
+
+
+
+private:
+    //从字符串流中获取一个新Token。
+    Token getAToken() {
+        this->skipWhiteSpaces();
+        if (this->stream.eof()){
+            return {TokenKind::Eof,  ""};
+        }
+        else{
+            auto ch = this->stream.peek();
+            if (this->isLetter(ch) || this->isDigit(ch)){
+                return this->parseIdentifer();
+            }
+            else if (ch == '"'){
+                return this->parseStringLiteral();
+            }
+            else if (ch == '(' || ch == ')' || ch == '{' ||
+                     ch == '}' || ch == ';' || ch == ','){
+                this->stream.next();
+                return {TokenKind::Seperator, std::string(1, ch)};
+            }
+            else if (ch == '/'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '*'){
+                    this->skipMultipleLineComments();
+                    return this->getAToken();
+                }
+                else if (ch1 == '/'){
+                    this->skipSingleLineComment();
+                    return this->getAToken();
+                }
+                else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "/="};
+                }
+                else{
+                    return {TokenKind::Operator, "/"};
+                }
+            }
+            else if (ch == '+'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '+'){
+                    this->stream.next();
+                    return {TokenKind::Operator, "++"};
+                }else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "+="};
+                }
+                else{
+                    return {TokenKind::Operator, "+"};
+                }
+            }
+            else if (ch == '-'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '-'){
+                    this->stream.next();
+                    return {TokenKind::Operator, "--"};
+                }else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "-="};
+                }
+                else{
+                    return {TokenKind::Operator, "-"};
+                }
+            }
+            else if (ch == '*'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "*="};
+                }
+                else{
+                    return {TokenKind::Operator, "*"};
+                }
+            }
+            else{
+                //暂时去掉不能识别的字符
+                std::cout << ("Unrecognized pattern meeting ': " + std::to_string(ch) +"', at" + toString(this->stream.line) + " col: " + toString(this->stream.col)) << std::endl;
+                this->stream.next();
+                return this->getAToken();
+            }
+        }
+    }
+
+    void skipSingleLineComment(){
+        //跳过第二个/，第一个之前已经跳过去了。
+        this->stream.next();
+
+        //往后一直找到回车或者eof
+        while(this->stream.peek() !='\n' && !this->stream.eof()){
+            this->stream.next();
+        }
+    }
+
+    void skipMultipleLineComments(){
+        //跳过*，/之前已经跳过去了。
+        this->stream.next();
+
+        if (!this->stream.eof()){
+            auto ch1 = this->stream.next();
+            //往后一直找到回车或者eof
+            while(!this->stream.eof()){
+                auto ch2 = this->stream.next();
+                if (ch1 == '*' && ch2 == '/'){
+                    return;
+                }
+                ch1 = ch2;
+            }
+        }
+
+        //如果没有匹配上，报错。
+        std::cout << ("Failed to find matching */ for multiple line comments at ': " + toString(this->stream.line) + " col: " + toString(this->stream.col)) << std::endl;
+    }
+
+    void skipWhiteSpaces(){
+        while (this->isWhiteSpace(this->stream.peek())){
+            this->stream.next();
+        }
+    }
+
+    Token parseStringLiteral() {
+        Token token {TokenKind::StringLiteral, ""};
+
+        //第一个字符不用判断，因为在调用者那里已经判断过了
+        this->stream.next();
+
+        while(!this->stream.eof() && this->stream.peek() !='"'){
+            token.text.push_back(this->stream.next());
+        }
+
+        if(this->stream.peek()=='"'){
+            //消化掉字符换末尾的引号
+            this->stream.next();
+        }
+        else{
+            std::cout << ("Expecting an \" at line: " + toString(this->stream.line) + " col: " + toString(this->stream.col)) << std::endl;
+        }
+
+        return token;
+    }
+
+    Token parseIdentifer() {
+        Token token = {TokenKind::Identifier,  ""};
+
+        //第一个字符不用判断，因为在调用者那里已经判断过了
+        token.text.push_back(this->stream.next());
+
+        //读入后序字符
+        while(!this->stream.eof() &&
+                this->isLetterDigitOrUnderScore(this->stream.peek())){
+            token.text.push_back(this->stream.next());
+        }
+
+        //识别出关键字
+        if (token.text == "function"){
+            token.kind = TokenKind::Keyword;
+        }
+
+        return token;
+    }
+
+    bool isLetterDigitOrUnderScore(char ch) {
+        return (ch>='A' && ch<='Z' ||
+                ch>='a' && ch<='z' ||
+                ch>='0' && ch<='9' ||
+                ch== '_');
+    }
+
+    bool isLetter(char ch) {
+        return (ch>='A' && ch <='Z' || ch>= 'a' && ch <='z');
+    }
+
+    bool isDigit(char ch) {
+        return (ch>='0' && ch <='9');
+    }
+
+    bool isWhiteSpace(char ch){
+        return (ch == ' ' || ch == '\n' || ch== '\t');
+    }
+};
 
 
 void compileAndRun(const std::string& program) {
