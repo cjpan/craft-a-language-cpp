@@ -30,6 +30,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <memory>
+#include <any>
 
 enum class TokenKind {Keyword, Identifier, StringLiteral, IntegerLiteral, DecimalLiteral, NullLiteral, BooleanLiteral, Seperator, Operator, Eof};
 
@@ -542,18 +543,80 @@ private:
 };
 
 std::set<std::string> Scanner::KeyWords
-    {
-        "function", "class",     "break",       "delete",    "return",
-        "case",      "do",        "if",          "switch",    "var",
-        "catch",     "else",      "in",          "this",      "void",
-        "continue",  "false",     "instanceof",  "throw",     "while",
-        "debugger",  "finally",   "new",         "true",      "with",
-        "default",   "for",       "null",        "try",       "typeof",
-        //下面这些用于严格模式
-        "implements","let",       "private",     "public",    "yield",
-        "interface", "package",   "protected",   "static"
-    };
+{
+    "function", "class",     "break",       "delete",    "return",
+    "case",      "do",        "if",          "switch",    "var",
+    "catch",     "else",      "in",          "this",      "void",
+    "continue",  "false",     "instanceof",  "throw",     "while",
+    "debugger",  "finally",   "new",         "true",      "with",
+    "default",   "for",       "null",        "try",       "typeof",
+    //下面这些用于严格模式
+    "implements","let",       "private",     "public",    "yield",
+    "interface", "package",   "protected",   "static"
+};
 
+struct AstVisitor;
+class AstNode{
+public:
+    //打印对象信息，prefix是前面填充的字符串，通常用于缩进显示
+    virtual void dump(const std::string& prefix) {}
+
+    //visitor模式中，用于接受vistor的访问。
+    virtual std::any accept(AstVisitor* visitor) = 0;
+};
+
+class Statement: public AstNode{
+};
+
+class Expression: public AstNode{
+};
+
+struct Block;
+
+class AstVisitor{
+public:
+    //对抽象类的访问。
+    //相应的具体类，会调用visitor合适的具体方法。
+    std::any visit(std::shared_ptr<AstNode>& node){
+        return node->accept(this);
+    }
+
+    std::any visitBlock(Block* block);
+
+};
+
+class Decl{
+public:
+    std::string name;
+    Decl(const std::string& name): name(name) {}
+};
+
+
+
+class Block: public AstNode{
+public:
+    std::vector<std::shared_ptr<AstNode>> stmts;
+    Block(std::vector<std::shared_ptr<AstNode>>& stmts){
+        this->stmts = stmts;
+    }
+    std::any accept(AstVisitor& visitor){
+        return visitor.visitBlock(this);
+    }
+    void dump(const std::string& prefix) {
+        std::cout << (prefix+"Block") << std::endl;
+        std::for_each(this->stmts.begin(), this->stmts.end(),
+            [&prefix](auto x) {x->dump(prefix+"    ");}
+        );
+    }
+};
+
+std::any AstVisitor::visitBlock(Block* block) {
+    std::any ret;
+    for(auto x: block->stmts){
+        ret = this->visit(x);
+    }
+    return ret;
+};
 
 void compileAndRun(const std::string& program) {
 
