@@ -101,18 +101,7 @@ private:
     std::list<Token> tokens;
     CharStream& stream;
 
-    std::set<std::string> KeyWords
-        {
-            "function", "class",     "break",       "delete",    "return",
-            "case",      "do",        "if",          "switch",    "var",
-            "catch",     "else",      "in",          "this",      "void",
-            "continue",  "false",     "instanceof",  "throw",     "while",
-            "debugger",  "finally",   "new",         "true",      "with",
-            "default",   "for",       "null",        "try",       "typeof",
-            //下面这些用于严格模式
-            "implements","let",       "private",     "public",    "yield",
-            "interface", "package",   "protected",   "static"
-        };
+    static std::set<std::string> KeyWords;
 
 public:
     Scanner(CharStream& stream) : stream(stream){}
@@ -162,17 +151,68 @@ private:
         }
         else{
             auto ch = this->stream.peek();
-            if (this->isLetter(ch) || this->isDigit(ch)){
+            if (this->isLetter(ch) || ch == '_'){
                 return this->parseIdentifer();
             }
             else if (ch == '"'){
                 return this->parseStringLiteral();
             }
-            else if (ch == '(' || ch == ')' || ch == '{' ||
-                     ch == '}' || ch == ';' || ch == ','){
+            else if (ch == '(' || ch == ')' || ch == '{' || ch == '}' ||
+                     ch == '[' || ch == ']' || ch == ',' || ch == ';' ||
+                     ch == ':' || ch == '?' || ch == '@'){
                 this->stream.next();
                 return {TokenKind::Seperator, std::string(1, ch)};
             }
+            //解析数字字面量，语法是：
+            // DecimalLiteral: IntegerLiteral '.' [0-9]*
+            //   | '.' [0-9]+
+            //   | IntegerLiteral
+            //   ;
+            // IntegerLiteral: '0' | [1-9] [0-9]* ;
+            else if (this->isDigit(ch)){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                std::string literal;
+                if(ch == '0'){//暂不支持八进制、二进制、十六进制
+                    if (!(ch1>='1' && ch1<='9')){
+                        literal= "0";
+                    }
+                    else {
+                        std::cout << ("0 cannot be followed by other digit now, at line: " +
+                        toString(this->stream.line) + " col: " + toString(this->stream.col))
+                        << std::endl;
+                        //暂时先跳过去
+                        this->stream.next();
+                        return this->getAToken();
+                    }
+                }
+                else if(ch>='1' && ch<='9'){
+                    literal += ch;
+                    while(this->isDigit(ch1)){
+                        ch = this->stream.next();
+                        literal += ch;
+                        ch1 = this->stream.peek();
+                    }
+                }
+                //加上小数点.
+                if (ch1 == '.'){
+                    //小数字面量
+                    literal += '.';
+                    this->stream.next();
+                    ch1 = this->stream.peek();
+                    while(this->isDigit(ch1)){
+                        ch = this->stream.next();
+                        literal += ch;
+                        ch1 = this->stream.peek();
+                    }
+                    return {TokenKind::DecimalLiteral, literal};
+                }
+                else{
+                    //返回一个整型直面量
+                    return {TokenKind::IntegerLiteral, literal};
+                }
+            }
+
             else if (ch == '/'){
                 this->stream.next();
                 auto ch1 = this->stream.peek();
@@ -231,6 +271,162 @@ private:
                     return {TokenKind::Operator, "*"};
                 }
             }
+
+
+            else if (ch == '%'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "%="};
+                }
+                else{
+                    return {TokenKind::Operator, "%"};
+                }
+            }
+            else if (ch == '>'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, ">="};
+                }
+                else if (ch1 == '>'){
+                    this->stream.next();
+                    auto ch1 = this->stream.peek();
+                    if (ch1 == '>'){
+                        this->stream.next();
+                        ch1 = this->stream.peek();
+                        if (ch1 == '='){
+                            this->stream.next();
+                            return {TokenKind::Operator, ">>>="};
+                        }
+                        else{
+                            return {TokenKind::Operator, ">>>"};
+                        }
+                    }
+                    else if (ch1 == '='){
+                        this->stream.next();
+                        return {TokenKind::Operator, ">>="};
+                    }
+                    else{
+                        return {TokenKind::Operator, ">>"};
+                    }
+                }
+                else{
+                    return {TokenKind::Operator, ">"};
+                }
+            }
+            else if (ch == '<'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "<="};
+                }
+                else if (ch1 == '<'){
+                    this->stream.next();
+                    ch1 = this->stream.peek();
+                    if (ch1 == '='){
+                        this->stream.next();
+                        return {TokenKind::Operator, "<<="};
+                    }
+                    else{
+                        return {TokenKind::Operator, "<<"};
+                    }
+                }
+                else{
+                    return {TokenKind::Operator, "<"};
+                }
+            }
+            else if (ch == '='){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    auto ch1 = this->stream.peek();
+                    if (ch1='='){
+                        this->stream.next();
+                        return {TokenKind::Operator, "==="};
+                    }
+                    else{
+                        return {TokenKind::Operator, "=="};
+                    }
+                }
+                //箭头=>
+                else if (ch1 == '>'){
+                    this->stream.next();
+                    return {TokenKind::Operator, "=>"};
+                }
+                else{
+                    return {TokenKind::Operator, "="};
+                }
+            }
+            else if (ch == '!'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    auto ch1 = this->stream.peek();
+                    if (ch1='='){
+                        this->stream.next();
+                        return {TokenKind::Operator, "!=="};
+                    }
+                    else{
+                        return {TokenKind::Operator, "!="};
+                    }
+                }
+                else{
+                    return {TokenKind::Operator, "!"};
+                }
+            }
+            else if (ch == '|'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '|'){
+                    this->stream.next();
+                    return {TokenKind::Operator, "||"};
+                }
+                else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "|="};
+                }
+                else{
+                    return {TokenKind::Operator, "|"};
+                }
+            }
+            else if (ch == '&'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '&'){
+                    this->stream.next();
+                    return {TokenKind::Operator, "&&"};
+                }
+                else if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "&="};
+                }
+                else{
+                    return {TokenKind::Operator, "&"};
+                }
+            }
+            else if (ch == '^'){
+                this->stream.next();
+                auto ch1 = this->stream.peek();
+                if (ch1 == '='){
+                    this->stream.next();
+                    return {TokenKind::Operator, "^="};
+                }
+                else{
+                    return {TokenKind::Operator, "^"};
+                }
+            }
+            else if (ch == '~'){
+                this->stream.next();
+                return {TokenKind::Operator,std::string(1, ch)};
+            }
+
+
             else{
                 //暂时去掉不能识别的字符
                 std::cout << ("Unrecognized pattern meeting ': " + std::to_string(ch) +"', at" + toString(this->stream.line) + " col: " + toString(this->stream.col)) << std::endl;
@@ -309,9 +505,17 @@ private:
             token.text.push_back(this->stream.next());
         }
 
-        //识别出关键字
-        if (token.text == "function"){
+        //识别出关键字（从字典里查，速度会比较快）
+        if (Scanner::KeyWords.count(token.text) > 0){
             token.kind = TokenKind::Keyword;
+        }
+        //null
+        else if (token.text == "null"){
+            token.kind = TokenKind::NullLiteral;
+        }
+        //布尔型字面量
+        else if (token.text == "true" || token.text == "false"){
+            token.kind = TokenKind::BooleanLiteral;
         }
 
         return token;
@@ -337,6 +541,19 @@ private:
     }
 };
 
+std::set<std::string> Scanner::KeyWords
+    {
+        "function", "class",     "break",       "delete",    "return",
+        "case",      "do",        "if",          "switch",    "var",
+        "catch",     "else",      "in",          "this",      "void",
+        "continue",  "false",     "instanceof",  "throw",     "while",
+        "debugger",  "finally",   "new",         "true",      "with",
+        "default",   "for",       "null",        "try",       "typeof",
+        //下面这些用于严格模式
+        "implements","let",       "private",     "public",    "yield",
+        "interface", "package",   "protected",   "static"
+    };
+
 
 void compileAndRun(const std::string& program) {
 
@@ -345,12 +562,12 @@ void compileAndRun(const std::string& program) {
         Scanner tokenizer(charStream);
         while(tokenizer.peek().kind!=TokenKind::Eof){
 
-            auto peek = tokenizer.peek();
-            auto peek2 = tokenizer.peek2();
+            // auto peek = tokenizer.peek();
+            // auto peek2 = tokenizer.peek2();
             auto next = tokenizer.next();
-            std::cout << "peek:" << peek << std::endl;
-            std::cout << "peek2:" << peek2 << std::endl;
-            //std::cout << "next:" << next << std::endl;
+            // std::cout << "peek:" << peek << std::endl;
+            // std::cout << "peek2:" << peek2 << std::endl;
+            std::cout << next << std::endl;
         }
     }
 
