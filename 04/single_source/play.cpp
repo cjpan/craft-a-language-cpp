@@ -562,7 +562,7 @@ public:
     virtual void dump(const std::string& prefix) {}
 
     //visitor模式中，用于接受vistor的访问。
-    virtual std::any accept(AstVisitor* visitor) = 0;
+    virtual std::any accept(AstVisitor& visitor) = 0;
 };
 
 class Statement: public AstNode{
@@ -572,26 +572,32 @@ class Expression: public AstNode{
 };
 
 struct Block;
+struct Prog;
+struct Binary;
+struct IntegerLiteral;
+struct ExpressionStatement;
 
 class AstVisitor{
 public:
     //对抽象类的访问。
     //相应的具体类，会调用visitor合适的具体方法。
     std::any visit(std::shared_ptr<AstNode>& node){
-        return node->accept(this);
+        return node->accept(*this);
     }
 
     std::any visitBlock(Block* block);
+    std::any visitProg(Prog* blog);
 
+    std::any visitBinary(Binary* exp);
+    std::any visitIntegerLiteral(IntegerLiteral* exp);
+    std::any visitExpressionStatement(ExpressionStatement* stmt);
 };
 
-class Decl{
+class Decl: public AstNode{
 public:
     std::string name;
     Decl(const std::string& name): name(name) {}
 };
-
-
 
 class Block: public AstNode{
 public:
@@ -599,14 +605,79 @@ public:
     Block(std::vector<std::shared_ptr<AstNode>>& stmts){
         this->stmts = stmts;
     }
-    std::any accept(AstVisitor& visitor){
+    std::any accept(AstVisitor& visitor) override {
         return visitor.visitBlock(this);
     }
-    void dump(const std::string& prefix) {
+    void dump(const std::string& prefix) override {
         std::cout << (prefix+"Block") << std::endl;
         std::for_each(this->stmts.begin(), this->stmts.end(),
             [&prefix](auto x) {x->dump(prefix+"    ");}
         );
+    }
+};
+
+class Prog: public Block{
+public:
+    std::any accept(AstVisitor& visitor) override {
+        return visitor.visitProg(this);
+    }
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"Prog") << std::endl;
+        std::for_each(this->stmts.begin(), this->stmts.end(),
+            [&prefix](auto x) {x->dump(prefix+"    ");}
+        );
+    }
+};
+
+/**
+ * 整型字面量
+ */
+class IntegerLiteral: public Expression{
+public:
+    int32_t value;
+    IntegerLiteral(int32_t value): value(value){
+    }
+    std::any accept(AstVisitor& visitor) override {
+        return visitor.visitIntegerLiteral(this);
+    }
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+ toString(this->value)) << std::endl;
+    }
+};
+
+/**
+ * 二元表达式
+ */
+class Binary: public Expression{
+public:
+    std::string op;      //运算符
+    std::shared_ptr<AstNode> exp1; //左边的表达式
+    std::shared_ptr<AstNode> exp2; //右边的表达式
+    Binary(const std::string& op,
+                std::shared_ptr<AstNode>& exp1,
+                std::shared_ptr<AstNode>& exp2):
+                op(op), exp1(exp1), exp2(exp2) {}
+
+    std::any accept(AstVisitor& visitor) override {
+        return visitor.visitBinary(this);
+    }
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"Binary:"+this->op) << std::endl;
+        this->exp1->dump(prefix+"    ");
+        this->exp2->dump(prefix+"    ");
+    }
+};
+
+class ExpressionStatement: public Statement{
+public:
+    std::shared_ptr<AstNode> exp;// Expression
+    ExpressionStatement(std::shared_ptr<AstNode> exp): exp(exp){}
+    std::any accept(AstVisitor& visitor) override {
+        return visitor.visitExpressionStatement(this);
+    }
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"ExpressionStatement") << std::endl;
+        this->exp->dump(prefix+"    ");
     }
 };
 
@@ -616,7 +687,30 @@ std::any AstVisitor::visitBlock(Block* block) {
         ret = this->visit(x);
     }
     return ret;
-};
+}
+
+std::any AstVisitor::visitProg(Prog* prog) {
+    std::any ret;
+    for(auto x: prog->stmts){
+        ret = this->visit(x);
+    }
+    return ret;
+}
+
+std::any AstVisitor::visitBinary(Binary* exp){
+    std::any ret;
+    this->visit(exp->exp1);
+    this->visit(exp->exp2);
+    return ret;
+}
+
+std::any AstVisitor::visitIntegerLiteral(IntegerLiteral* exp) {
+    return exp->value;
+}
+
+std::any AstVisitor::visitExpressionStatement(ExpressionStatement* stmt) {
+    return this->visit(stmt->exp);
+}
 
 void compileAndRun(const std::string& program) {
 
