@@ -585,12 +585,12 @@ public:
         return node->accept(*this);
     }
 
-    std::any visitBlock(Block* block);
-    std::any visitProg(Prog* blog);
+    std::any visitBlock(Block& block);
+    std::any visitProg(Prog& blog);
 
-    std::any visitBinary(Binary* exp);
-    std::any visitIntegerLiteral(IntegerLiteral* exp);
-    std::any visitExpressionStatement(ExpressionStatement* stmt);
+    std::any visitBinary(Binary& exp);
+    std::any visitIntegerLiteral(IntegerLiteral& exp);
+    std::any visitExpressionStatement(ExpressionStatement& stmt);
 };
 
 class Decl: public AstNode{
@@ -606,7 +606,7 @@ public:
         this->stmts = stmts;
     }
     std::any accept(AstVisitor& visitor) override {
-        return visitor.visitBlock(this);
+        return visitor.visitBlock(*this);
     }
     void dump(const std::string& prefix) override {
         std::cout << (prefix+"Block") << std::endl;
@@ -618,8 +618,10 @@ public:
 
 class Prog: public Block{
 public:
+    Prog(std::vector<std::shared_ptr<AstNode>>& stmts): Block(stmts){}
+
     std::any accept(AstVisitor& visitor) override {
-        return visitor.visitProg(this);
+        return visitor.visitProg(*this);
     }
     void dump(const std::string& prefix) override {
         std::cout << (prefix+"Prog") << std::endl;
@@ -638,7 +640,7 @@ public:
     IntegerLiteral(int32_t value): value(value){
     }
     std::any accept(AstVisitor& visitor) override {
-        return visitor.visitIntegerLiteral(this);
+        return visitor.visitIntegerLiteral(*this);
     }
     void dump(const std::string& prefix) override {
         std::cout << (prefix+ toString(this->value)) << std::endl;
@@ -659,7 +661,7 @@ public:
                 op(op), exp1(exp1), exp2(exp2) {}
 
     std::any accept(AstVisitor& visitor) override {
-        return visitor.visitBinary(this);
+        return visitor.visitBinary(*this);
     }
     void dump(const std::string& prefix) override {
         std::cout << (prefix+"Binary:"+this->op) << std::endl;
@@ -673,7 +675,7 @@ public:
     std::shared_ptr<AstNode> exp;// Expression
     ExpressionStatement(std::shared_ptr<AstNode> exp): exp(exp){}
     std::any accept(AstVisitor& visitor) override {
-        return visitor.visitExpressionStatement(this);
+        return visitor.visitExpressionStatement(*this);
     }
     void dump(const std::string& prefix) override {
         std::cout << (prefix+"ExpressionStatement") << std::endl;
@@ -681,36 +683,274 @@ public:
     }
 };
 
-std::any AstVisitor::visitBlock(Block* block) {
+std::any AstVisitor::visitBlock(Block& block) {
     std::any ret;
-    for(auto x: block->stmts){
+    for(auto x: block.stmts){
         ret = this->visit(x);
     }
     return ret;
 }
 
-std::any AstVisitor::visitProg(Prog* prog) {
+std::any AstVisitor::visitProg(Prog& prog) {
     std::any ret;
-    for(auto x: prog->stmts){
+    for(auto x: prog.stmts){
         ret = this->visit(x);
     }
     return ret;
 }
 
-std::any AstVisitor::visitBinary(Binary* exp){
+std::any AstVisitor::visitBinary(Binary& exp){
     std::any ret;
-    this->visit(exp->exp1);
-    this->visit(exp->exp2);
+    this->visit(exp.exp1);
+    this->visit(exp.exp2);
     return ret;
 }
 
-std::any AstVisitor::visitIntegerLiteral(IntegerLiteral* exp) {
-    return exp->value;
+std::any AstVisitor::visitIntegerLiteral(IntegerLiteral& exp) {
+    return exp.value;
 }
 
-std::any AstVisitor::visitExpressionStatement(ExpressionStatement* stmt) {
-    return this->visit(stmt->exp);
+std::any AstVisitor::visitExpressionStatement(ExpressionStatement& stmt) {
+    return this->visit(stmt.exp);
 }
+
+class Parser{
+public:
+    Scanner& scanner;
+    Parser(Scanner& scanner): scanner(scanner) {}
+    static std::unordered_map<std::string, int32_t> opPrec;
+    static int32_t getPrec(const std::string& op){
+        auto it = opPrec.find(op);
+        if (it == opPrec.end()){
+            return -1;
+        }
+        else{
+            return it->second;
+        }
+    }
+
+
+    std::shared_ptr<Prog> parseProg() {
+        auto stmts = this->parseStatementList();
+        return std::make_shared<Prog>(stmts);
+    }
+
+    std::vector<std::shared_ptr<AstNode>> parseStatementList() {
+        std::vector<std::shared_ptr<AstNode>> stmts;
+        auto t = this->scanner.peek();
+        // statementList的Follow集合里有EOF和"}"这两个元素
+        // 分别用于prog和functionBody等场景。
+        while(t.kind != TokenKind::Eof && t.text != "}"){
+           auto stmt = this->parseStatement();
+
+           if (stmt != nullptr){
+               stmts.push_back(stmt);
+           }
+           else{
+               std::cout << ("Error parsing a Statement in Programm.") << std::endl;
+               return {};
+           }
+           t = this->scanner.peek();
+        }
+
+        return stmts;
+    }
+
+     std::shared_ptr<AstNode> parseStatement() {
+        auto t = this->scanner.peek();
+        if (t.kind == TokenKind::Keyword && t.text =="function"){
+            return this->parseFunctionDecl();
+        }
+        else if (t.text == "let"){
+            return this->parseVariableDecl();
+        }
+        else if (t.kind == TokenKind::Identifier ||
+                 t.kind == TokenKind::DecimalLiteral ||
+                 t.kind == TokenKind::IntegerLiteral ||
+                 t.kind == TokenKind::StringLiteral ||
+                 t.text == "("){
+            return this->parseExpressionStatement();
+        }
+        else{
+            std::cout << ("Can not recognize a expression starting with: " + this->scanner.peek().text) << std::endl;
+            return nullptr;
+        }
+     }
+
+    std::shared_ptr<AstNode> parseExpressionStatement() {
+        auto exp = this->parseExpression();
+        if (exp != nullptr){
+            auto t = this->scanner.peek();
+            if (t.text == ";"){
+                this->scanner.next();
+                std::shared_ptr<AstNode> expStmt = std::make_shared<ExpressionStatement>(exp);
+                return expStmt;
+            }
+            else{
+                std::cout << ("Expecting a semicolon at the end of an expresson statement, while we got a " + t.text) << std::endl;
+            }
+        }
+        else{
+            std::cout << ("Error parsing ExpressionStatement") << std::endl;
+        }
+        return nullptr;
+    }
+
+
+
+    std::shared_ptr<AstNode> parseExpression(){
+        return this->parseBinary(0);
+    }
+
+    std::shared_ptr<AstNode> parseBinary(int32_t prec) {
+        // console.log("parseBinary : " + prec);
+        auto exp1 = this->parsePrimary();
+        if (exp1 != nullptr){
+            auto t = this->scanner.peek();
+            auto tprec = this->getPrec(t.text);
+
+            //下面这个循环的意思是：只要右边出现的新运算符的优先级更高，
+            //那么就把右边出现的作为右子节点。
+            /**
+             * 对于2+3*5
+             * 第一次循环，遇到+号，优先级大于零，所以做一次递归的binary
+             * 在递归的binary中，遇到乘号，优先级大于+号，所以形成3*5返回，又变成上一级的右子节点。
+             *
+             * 反过来，如果是3*5+2
+             * 第一次循环还是一样。
+             * 在递归中，新的运算符的优先级要小，所以只返回一个5，跟前一个节点形成3*5.
+             */
+
+            while (t.kind == TokenKind::Operator &&  tprec > prec){
+                this->scanner.next();  //跳过运算符
+                auto exp2 = this->parseBinary(tprec);
+                if (exp2 != nullptr){
+                    std::shared_ptr<AstNode> exp = std::make_shared<Binary>(t.text, exp1, exp2);
+                    exp1 = exp;
+                    t = this->scanner.peek();
+                    tprec = this->getPrec(t.text);
+                }
+                else{
+                    std::cout << ("Can not recognize a expression starting with: " + t.text) << std::endl;
+                }
+            }
+            return exp1;
+        }
+        else{
+            std::cout << ("Can not recognize a expression starting with: " + this->scanner.peek().text) << std::endl;
+            return nullptr;
+        }
+    }
+
+    /**
+     * 解析基础表达式。
+     */
+    std::shared_ptr<AstNode> parsePrimary() {
+        auto t = this->scanner.peek();
+        std::cout << ("parsePrimary: " + t.text) << std::endl;
+
+        //知识点：以Identifier开头，可能是函数调用，也可能是一个变量，所以要再多向后看一个Token，
+        //这相当于在局部使用了LL(2)算法。
+        if (t.kind == TokenKind::Identifier){
+            if (this->scanner.peek2().text == "("){
+                return this->parseFunctionCall();
+            }
+            else{
+                this->scanner.next();
+                // return new Variable(t.text);
+                std::cout << ("Error not support Variable in Programm.") << std::endl;
+                return nullptr;
+            }
+        }
+        else if (t.kind == TokenKind::IntegerLiteral){
+            this->scanner.next();
+            std::shared_ptr<AstNode> ret = std::make_shared<IntegerLiteral>(std::stoi(t.text));
+            return ret;
+        }
+        else if (t.kind == TokenKind::DecimalLiteral){
+            this->scanner.next();
+            //return new DecimalLiteral(parseFloat(t.text));
+            std::cout << ("Error not support DecimalLiteral in Programm.") << std::endl;
+            return nullptr;
+        }
+        else if (t.kind == TokenKind::StringLiteral){
+            this->scanner.next();
+            // return new StringLiteral(t.text);
+            std::cout << ("Error not support StringLiteral in Programm.") << std::endl;
+            return nullptr;
+        }
+        else if (t.text == "("){
+            this->scanner.next();
+            auto exp = this->parseExpression();
+            auto t1 = this->scanner.peek();
+            if (t1.text == ")"){
+                this->scanner.next();
+                return exp;
+            }
+            else{
+                std::cout << ("Expecting a ')' at the end of a primary expresson, while we got a " + t.text) << std::endl;
+                return nullptr;
+            }
+        }
+        else{
+            std::cout << ("Can not recognize a primary expression starting with: " + t.text) << std::endl;
+            return nullptr;
+        }
+    }
+
+    std::shared_ptr<AstNode> parseFunctionDecl() {
+        std::cout << ("Error not support function.") << std::endl;
+        return nullptr;
+    }
+
+    std::shared_ptr<AstNode> parseFunctionCall() {
+        std::cout << ("Error not support function.") << std::endl;
+        return nullptr;
+    }
+
+    std::shared_ptr<AstNode> parseVariableDecl() {
+        std::cout << ("Error not support variable.") << std::endl;
+        return nullptr;
+    }
+
+ };
+
+std::unordered_map<std::string, int32_t> Parser::opPrec = {
+    {"=", 2},
+    {"+=", 2},
+    {"-=", 2},
+    {"*=", 2},
+    {"-=", 2},
+    {"%=", 2},
+    {"&=", 2},
+    {"|=", 2},
+    {"^=", 2},
+    {"~=", 2},
+    {"<<=", 2},
+    {">>=", 2},
+    {">>>=", 2},
+    {"||", 4},
+    {"&&", 5},
+    {"|", 6},
+    {"^", 7},
+    {"&", 8},
+    {"==", 9},
+    {"===", 9},
+    {"!=", 9},
+    {"!==", 9},
+    {">", 10},
+    {">=", 10},
+    {"<", 10},
+    {"<=", 10},
+    {"<<", 11},
+    {">>", 11},
+    {">>>", 11},
+    {"+", 12},
+    {"-", 12},
+    {"*", 13},
+    {"/", 13},
+    {"%", 13},
+};
 
 void compileAndRun(const std::string& program) {
 
@@ -727,6 +967,12 @@ void compileAndRun(const std::string& program) {
             std::cout << next << std::endl;
         }
     }
+
+    CharStream charStream(program);
+    Scanner tokenizer(charStream);
+
+    auto prog = Parser(tokenizer).parseProg();
+    prog->dump("");
 
 /*
     std::cout << "program start use tokens" << std::endl;
