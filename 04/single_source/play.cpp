@@ -30,7 +30,15 @@
 #include <unordered_map>
 #include <algorithm>
 #include <memory>
+
+#include <type_traits>
 #include <any>
+#include <functional>
+#include <iomanip>
+
+#include <typeindex>
+#include <typeinfo>
+
 
 enum class TokenKind {Keyword, Identifier, StringLiteral, IntegerLiteral, DecimalLiteral, NullLiteral, BooleanLiteral, Seperator, Operator, Eof};
 
@@ -1000,10 +1008,47 @@ public:
         }
 
         return ret;
-
     }
-
 };
+
+template<class T, class F>
+inline std::pair<const std::type_index, std::function<void(std::any const&)>>
+    to_any_visitor(F const &f)
+{
+    return {
+        std::type_index(typeid(T)),
+        [g = f](std::any const &a)
+        {
+            if constexpr (std::is_void_v<T>)
+                g();
+            else
+                g(std::any_cast<T const&>(a));
+        }
+    };
+}
+
+static std::unordered_map<
+    std::type_index, std::function<void(std::any const&)>>
+    any_visitor {
+        to_any_visitor<void>([]{ std::cout << "{}"; }),
+        to_any_visitor<int>([](int x){ std::cout << x; }),
+        to_any_visitor<unsigned>([](unsigned x){ std::cout << x; }),
+        to_any_visitor<float>([](float x){ std::cout << x; }),
+        to_any_visitor<double>([](double x){ std::cout << x; }),
+        to_any_visitor<char const*>([](char const *s)
+            { std::cout << std::quoted(s); }),
+        // ... add more handlers for your types ...
+    };
+
+inline void printAny(const std::any& a)
+{
+    if (const auto it = any_visitor.find(std::type_index(a.type()));
+        it != any_visitor.cend()) {
+        it->second(a);
+    } else {
+        std::cout << "Unregistered type "<< std::quoted(a.type().name());
+    }
+}
 
 
 void compileAndRun(const std::string& program) {
@@ -1035,8 +1080,8 @@ void compileAndRun(const std::string& program) {
     // run program
     auto ret = Intepretor().visit(prog);
     if (ret.has_value()) {
-        std::cout << "ret type: "<< ret.type().name() << ", value: " <<
-        std::any_cast<int>(ret) << std::endl;
+        std::cout << "ret type: "<< ret.type().name() << std::endl;
+        printAny(ret);
     }
 
 
