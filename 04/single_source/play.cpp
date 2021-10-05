@@ -585,12 +585,12 @@ public:
         return node->accept(*this);
     }
 
-    std::any visitBlock(Block& block);
-    std::any visitProg(Prog& blog);
+    virtual std::any visitBlock(Block& block);
+    virtual std::any visitProg(Prog& blog);
 
-    std::any visitBinary(Binary& exp);
-    std::any visitIntegerLiteral(IntegerLiteral& exp);
-    std::any visitExpressionStatement(ExpressionStatement& stmt);
+    virtual std::any visitBinary(Binary& exp);
+    virtual std::any visitIntegerLiteral(IntegerLiteral& exp);
+    virtual std::any visitExpressionStatement(ExpressionStatement& stmt);
 };
 
 class Decl: public AstNode{
@@ -699,7 +699,7 @@ std::any AstVisitor::visitProg(Prog& prog) {
     return ret;
 }
 
-std::any AstVisitor::visitBinary(Binary& exp){
+std::any AstVisitor::visitBinary(Binary& exp) {
     std::any ret;
     this->visit(exp.exp1);
     this->visit(exp.exp2);
@@ -730,7 +730,7 @@ public:
     }
 
 
-    std::shared_ptr<Prog> parseProg() {
+    std::shared_ptr<AstNode> parseProg() {
         auto stmts = this->parseStatementList();
         return std::make_shared<Prog>(stmts);
     }
@@ -952,9 +952,64 @@ std::unordered_map<std::string, int32_t> Parser::opPrec = {
     {"%", 13},
 };
 
+class Intepretor: public AstVisitor{
+public:
+    std::any visitBinary(Binary& bi) override {
+        std::cout << ("visitBinary:" + bi.op) << std::endl;
+
+        std::any ret;
+
+        auto va1 = this->visit(bi.exp1);
+        auto va2 = this->visit(bi.exp2);
+
+        auto v1 = std::any_cast<int>(va1);
+        auto v2 = std::any_cast<int>(va2);
+
+        if (bi.op == "+") {
+            ret = v1 + v2;
+        } else if (bi.op == "-") {
+            ret = v1 - v2;
+        } else if (bi.op == "*") {
+            ret = v1 * v2;
+        } else if (bi.op == "/") {
+            ret = v1 / v2;
+        } else if (bi.op == "%") {
+            ret = v1 % v2;
+        // } else if (bi.op == ">") {
+        //     ret = v1 > v2;
+        // } else if (bi.op == ">=") {
+        //     ret = v1 >= v2;
+        // } else if (bi.op == "<") {
+        //     ret = v1 < v2;
+        // } else if (bi.op == "<=") {
+        //     ret = v1 <= v2;
+        // if (bi.op == "&&") {
+        //     ret = v1 && v2;
+        // } else if (bi.op == "||") {
+        //     ret = v1 || v2;
+        // } else if (bi.op == "=") {
+        //     if (v1left != nullptr){
+        //         this->setVariableValue(v1left.variable.name, v2);
+        //     }
+        //     else{
+        //         std::cout << ("Assignment need a left value) { ") << std::endl;
+        //     }
+        }
+        else {
+            std::cout << ("Unsupported binary operation) { " + bi.op) << std::endl;
+        }
+
+        return ret;
+
+    }
+
+};
+
+
 void compileAndRun(const std::string& program) {
 
     {
+        // print stokens
         CharStream charStream(program);
         Scanner tokenizer(charStream);
         while(tokenizer.peek().kind!=TokenKind::Eof){
@@ -971,8 +1026,19 @@ void compileAndRun(const std::string& program) {
     CharStream charStream(program);
     Scanner tokenizer(charStream);
 
+    // Syntax analysis
     auto prog = Parser(tokenizer).parseProg();
     prog->dump("");
+
+    // Semantic analysis
+
+    // run program
+    auto ret = Intepretor().visit(prog);
+    if (ret.has_value()) {
+        std::cout << "ret type: "<< ret.type().name() << ", value: " <<
+        std::any_cast<int>(ret) << std::endl;
+    }
+
 
 /*
     std::cout << "program start use tokens" << std::endl;
