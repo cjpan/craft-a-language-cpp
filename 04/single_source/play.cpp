@@ -585,6 +585,7 @@ struct Prog;
 struct Binary;
 struct IntegerLiteral;
 struct ExpressionStatement;
+struct VariableDecl;
 
 class AstVisitor{
 public:
@@ -596,6 +597,8 @@ public:
 
     virtual std::any visitBlock(Block& block);
     virtual std::any visitProg(Prog& blog);
+
+    virtual std::any visitVariableDecl(VariableDecl& variableDecl);
 
     virtual std::any visitBinary(Binary& exp);
     virtual std::any visitIntegerLiteral(IntegerLiteral& exp);
@@ -640,6 +643,29 @@ public:
     }
 };
 
+/**
+ * 变量声明节点
+ */
+class VariableDecl: public Decl{
+public:
+    std::string varType;       //变量类型
+    std::shared_ptr<AstNode> init; //变量初始化所使用的表达式
+    VariableDecl(const std::string& name, const std::string& varType,
+        std::shared_ptr<AstNode>& init): Decl(name), varType(varType), init(init){
+    }
+    std::any accept(AstVisitor& visitor) override {
+        return visitor.visitVariableDecl(*this);
+    }
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"VariableDecl "+this->name +", type: " + this->varType) << std::endl;
+        if (this->init == nullptr){
+            std::cout << (prefix+"no initialization.") << std::endl;
+        }
+        else{
+            this->init->dump(prefix+"    ");
+        }
+    }
+};
 /**
  * 整型字面量
  */
@@ -706,6 +732,13 @@ std::any AstVisitor::visitProg(Prog& prog) {
         ret = this->visit(x);
     }
     return ret;
+}
+
+std::any AstVisitor::visitVariableDecl(VariableDecl& variableDecl) {
+    std::any ret;
+    if (variableDecl.init != nullptr){
+        return this->visit(variableDecl.init);
+    }
 }
 
 std::any AstVisitor::visitBinary(Binary& exp) {
@@ -781,7 +814,7 @@ public:
             return this->parseExpressionStatement();
         }
         else{
-            std::cout << ("Can not recognize a expression starting with: " + this->scanner.peek().text) << std::endl;
+            std::cout << ("parseStatement: Can not recognize a expression starting with: " + this->scanner.peek().text) << std::endl;
             return nullptr;
         }
      }
@@ -840,13 +873,13 @@ public:
                     tprec = this->getPrec(t.text);
                 }
                 else{
-                    std::cout << ("Can not recognize a expression starting with: " + t.text) << std::endl;
+                    std::cout << ("parseBinary1: Can not recognize a expression starting with: " + t.text) << std::endl;
                 }
             }
             return exp1;
         }
         else{
-            std::cout << ("Can not recognize a expression starting with: " + this->scanner.peek().text) << std::endl;
+            std::cout << ("parseBinary2: Can not recognize a expression starting with: " + this->scanner.peek().text) << std::endl;
             return nullptr;
         }
     }
@@ -867,7 +900,7 @@ public:
             else{
                 this->scanner.next();
                 // return new Variable(t.text);
-                std::cout << ("Error not support Variable in Programm.") << std::endl;
+                std::cout << ("Error not support Variable in Program: " + t.text) << std::endl;
                 return nullptr;
             }
         }

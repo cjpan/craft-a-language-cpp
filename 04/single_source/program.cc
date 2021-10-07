@@ -1,2 +1,2 @@
 let myAge:number = 18;
-myAge = myAge + 10;
+//myAge = myAge + 10;
