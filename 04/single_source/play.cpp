@@ -30,6 +30,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <memory>
+#include <map>
 
 #include <type_traits>
 #include <any>
@@ -983,14 +984,14 @@ public:
             ret = v1 / v2;
         } else if (bi.op == "%") {
             ret = v1 % v2;
-        // } else if (bi.op == ">") {
-        //     ret = v1 > v2;
-        // } else if (bi.op == ">=") {
-        //     ret = v1 >= v2;
-        // } else if (bi.op == "<") {
-        //     ret = v1 < v2;
-        // } else if (bi.op == "<=") {
-        //     ret = v1 <= v2;
+        } else if (bi.op == ">") {
+            ret = v1 > v2;
+        } else if (bi.op == ">=") {
+            ret = v1 >= v2;
+        } else if (bi.op == "<") {
+            ret = v1 < v2;
+        } else if (bi.op == "<=") {
+            ret = v1 <= v2;
         // if (bi.op == "&&") {
         //     ret = v1 && v2;
         // } else if (bi.op == "||") {
@@ -1030,13 +1031,13 @@ inline std::pair<const std::type_index, std::function<void(std::any const&)>>
 static std::unordered_map<
     std::type_index, std::function<void(std::any const&)>>
     any_visitor {
-        to_any_visitor<void>([]{ std::cout << "{}"; }),
-        to_any_visitor<int>([](int x){ std::cout << x; }),
-        to_any_visitor<unsigned>([](unsigned x){ std::cout << x; }),
-        to_any_visitor<float>([](float x){ std::cout << x; }),
-        to_any_visitor<double>([](double x){ std::cout << x; }),
+        to_any_visitor<void>([]{ std::cout << "{}" << std::endl; }),
+        to_any_visitor<int>([](int x){ std::cout << x << std::endl; }),
+        to_any_visitor<unsigned>([](unsigned x){ std::cout << x << std::endl; }),
+        to_any_visitor<float>([](float x){ std::cout << x << std::endl; }),
+        to_any_visitor<double>([](double x){ std::cout << x << std::endl; }),
         to_any_visitor<char const*>([](char const *s)
-            { std::cout << std::quoted(s); }),
+            { std::cout << std::quoted(s) << std::endl; }),
         // ... add more handlers for your types ...
     };
 
@@ -1120,17 +1121,26 @@ static std::string ReadFile(const std::string& filename) {
     return buf.str();
 }
 
+
+
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
          std::cout << (std::string("Usage: ") + argv[0] + " FILENAME");
          return 0;
     }
 
+
+
     std::string program = ReadFile(argv[1]);
     std::cout << ("source code:") << std::endl;
     std::cout << (program) << std::endl;
 
     compileAndRun(program);
+
+    std::map<std::pair<std::type_index, std::type_index>, std::function<std::any(std::any const&, std::any const&)>> myMap;
+
+
 
     return 0;
 }
