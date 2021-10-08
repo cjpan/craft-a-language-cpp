@@ -737,6 +737,7 @@ std::any AstVisitor::visitProg(Prog& prog) {
 std::any AstVisitor::visitVariableDecl(VariableDecl& variableDecl) {
     std::any ret;
     if (variableDecl.init != nullptr){
+        std::cout << "this->visit(variableDecl.init)" << std::endl;
         return this->visit(variableDecl.init);
     }
 }
@@ -951,8 +952,53 @@ public:
     }
 
     std::shared_ptr<AstNode> parseVariableDecl() {
-        std::cout << ("Error not support variable.") << std::endl;
-        return nullptr;
+        //跳过'let'
+        this->scanner.next();
+
+        auto t = this->scanner.next();
+        if (t.kind == TokenKind::Identifier){
+            auto varName = t.text;
+
+            std::string varType = "any";
+            std::shared_ptr<AstNode> init = nullptr;
+
+            auto t1 = this->scanner.peek();
+            //类型标注
+            if (t1.text == ":"){
+                this->scanner.next();
+                t1 = this->scanner.peek();
+                if (t1.kind == TokenKind::Identifier){
+                    this->scanner.next();
+                    varType = t1.text;
+                    t1 = this->scanner.peek();
+                }
+                else{
+                    std::cout << ("Error parsing type annotation in VariableDecl") << std::endl;
+                    return nullptr;
+                }
+            }
+
+            //初始化部分
+            if (t1.text == "="){
+                this->scanner.next();
+                init = this->parseExpression();
+            }
+
+            //分号
+            t1 = this->scanner.peek();
+            if (t1.text==";"){
+                this->scanner.next();
+                return std::make_shared<VariableDecl>(varName, varType, init);
+            }
+            else{
+                std::cout << ("Expecting ; at the end of varaible declaration, while we meet " + t1.text) << std::endl;
+                return nullptr;
+            }
+        }
+        else{
+            std::cout << ("Expecting variable name in VariableDecl, while we meet " + t.text) << std::endl;
+            return nullptr;
+        }
     }
 
  };
@@ -1112,9 +1158,10 @@ void compileAndRun(const std::string& program) {
     // Semantic analysis
 
     // run program
+    std::cout << "------------run------------" << std::endl;
     auto ret = Intepretor().visit(prog);
     if (ret.has_value()) {
-        std::cout << "ret type: "<< ret.type().name() << std::endl;
+        std::cout << "program ret type: "<< ret.type().name() << std::endl;
         printAny(ret);
     }
 
@@ -1170,10 +1217,6 @@ int main(int argc, char* argv[]) {
     std::cout << (program) << std::endl;
 
     compileAndRun(program);
-
-    std::map<std::pair<std::type_index, std::type_index>, std::function<std::any(std::any const&, std::any const&)>> myMap;
-
-
 
     return 0;
 }
