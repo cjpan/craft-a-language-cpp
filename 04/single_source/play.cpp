@@ -586,6 +586,7 @@ struct Binary;
 struct IntegerLiteral;
 struct ExpressionStatement;
 struct VariableDecl;
+struct Variable;
 
 class AstVisitor{
 public:
@@ -599,6 +600,7 @@ public:
     virtual std::any visitProg(Prog& blog);
 
     virtual std::any visitVariableDecl(VariableDecl& variableDecl);
+    virtual std::any visitVariable(Variable& variable);
 
     virtual std::any visitBinary(Binary& exp);
     virtual std::any visitIntegerLiteral(IntegerLiteral& exp);
@@ -664,6 +666,22 @@ public:
         else{
             this->init->dump(prefix+"    ");
         }
+    }
+};
+
+/**
+ * 变量引用
+ */
+class Variable: public Expression{
+public:
+    std::string name;
+    std::shared_ptr<AstNode> decl; //指向变量声明
+    Variable(const std::string& name): name(name){}
+    std::any accept(AstVisitor& visitor) override {
+        return visitor.visitVariable(*this);
+    }
+    void dump(const std::string& prefix) override {
+        std::cout << (prefix+"Variable: "+this->name + (this->decl!=nullptr ? ", resolved" : ", not resolved")) << std::endl;
     }
 };
 /**
@@ -740,6 +758,10 @@ std::any AstVisitor::visitVariableDecl(VariableDecl& variableDecl) {
         std::cout << "this->visit(variableDecl.init)" << std::endl;
         return this->visit(variableDecl.init);
     }
+}
+
+std::any AstVisitor::visitVariable(Variable& variable) {
+    return std::any();
 }
 
 std::any AstVisitor::visitBinary(Binary& exp) {
@@ -900,9 +922,7 @@ public:
             }
             else{
                 this->scanner.next();
-                // return new Variable(t.text);
-                std::cout << ("Error not support Variable in Program: " + t.text) << std::endl;
-                return nullptr;
+                return std::make_shared<Variable>(t.text);
             }
         }
         else if (t.kind == TokenKind::IntegerLiteral){
