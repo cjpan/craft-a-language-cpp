@@ -762,6 +762,7 @@ std::any AstVisitor::visitVariableDecl(VariableDecl& variableDecl) {
 }
 
 std::any AstVisitor::visitVariable(Variable& variable) {
+    std::cout << "AstVisitor::visitVariable" << std::endl;
     return std::any();
 }
 
@@ -1061,57 +1062,6 @@ std::unordered_map<std::string, int32_t> Parser::opPrec = {
     {"%", 13},
 };
 
-class Intepretor: public AstVisitor{
-public:
-    std::any visitBinary(Binary& bi) override {
-        std::cout << ("visitBinary:" + bi.op) << std::endl;
-
-        std::any ret;
-
-        auto va1 = this->visit(bi.exp1);
-        auto va2 = this->visit(bi.exp2);
-
-        auto v1 = std::any_cast<int>(va1);
-        auto v2 = std::any_cast<int>(va2);
-
-        if (bi.op == "+") {
-            ret = v1 + v2;
-        } else if (bi.op == "-") {
-            ret = v1 - v2;
-        } else if (bi.op == "*") {
-            ret = v1 * v2;
-        } else if (bi.op == "/") {
-            ret = v1 / v2;
-        } else if (bi.op == "%") {
-            ret = v1 % v2;
-        } else if (bi.op == ">") {
-            ret = v1 > v2;
-        } else if (bi.op == ">=") {
-            ret = v1 >= v2;
-        } else if (bi.op == "<") {
-            ret = v1 < v2;
-        } else if (bi.op == "<=") {
-            ret = v1 <= v2;
-        // if (bi.op == "&&") {
-        //     ret = v1 && v2;
-        // } else if (bi.op == "||") {
-        //     ret = v1 || v2;
-        // } else if (bi.op == "=") {
-        //     if (v1left != nullptr){
-        //         this->setVariableValue(v1left.variable.name, v2);
-        //     }
-        //     else{
-        //         std::cout << ("Assignment need a left value) { ") << std::endl;
-        //     }
-        }
-        else {
-            std::cout << ("Unsupported binary operation) { " + bi.op) << std::endl;
-        }
-
-        return ret;
-    }
-};
-
 /**
  * 符号类型
  */
@@ -1195,6 +1145,65 @@ public:
     }
 };
 
+class Intepretor: public AstVisitor{
+public:
+    std::any visitBinary(Binary& bi) override {
+        std::cout << ("visitBinary:" + bi.op) << std::endl;
+
+        std::any ret;
+
+        auto va1 = this->visit(bi.exp1);
+        auto va2 = this->visit(bi.exp2);
+
+        int v1 = {0};
+        int v2 = {0};
+        try {
+            v1 = std::any_cast<int>(va1);
+            v2 = std::any_cast<int>(va2);
+        } catch (...) {
+            std::exception_ptr p = std::current_exception();
+            std::clog <<(p ? p.__cxa_exception_type()->name() :"null") << std::endl;
+        }
+
+
+        if (bi.op == "+") {
+            ret = v1 + v2;
+        } else if (bi.op == "-") {
+            ret = v1 - v2;
+        } else if (bi.op == "*") {
+            ret = v1 * v2;
+        } else if (bi.op == "/") {
+            ret = v1 / v2;
+        } else if (bi.op == "%") {
+            ret = v1 % v2;
+        } else if (bi.op == ">") {
+            ret = v1 > v2;
+        } else if (bi.op == ">=") {
+            ret = v1 >= v2;
+        } else if (bi.op == "<") {
+            ret = v1 < v2;
+        } else if (bi.op == "<=") {
+            ret = v1 <= v2;
+        // if (bi.op == "&&") {
+        //     ret = v1 && v2;
+        // } else if (bi.op == "||") {
+        //     ret = v1 || v2;
+        // } else if (bi.op == "=") {
+        //     if (v1left != nullptr){
+        //         this->setVariableValue(v1left.variable.name, v2);
+        //     }
+        //     else{
+        //         std::cout << ("Assignment need a left value) { ") << std::endl;
+        //     }
+        }
+        else {
+            std::cout << ("Unsupported binary operation) { " + bi.op) << std::endl;
+        }
+
+        return ret;
+    }
+};
+
 template<class T, class F>
 inline std::pair<const std::type_index, std::function<void(std::any const&)>>
     to_any_visitor(F const &f)
@@ -1271,11 +1280,11 @@ void compileAndRun(const std::string& program) {
 
     // run program
     std::cout << "------------run------------" << std::endl;
-    // auto ret = Intepretor().visit(prog);
-    // if (ret.has_value()) {
-        // std::cout << "program ret type: "<< ret.type().name() << std::endl;
-        // printAny(ret);
-    // }
+    auto ret = Intepretor().visit(prog);
+    if (ret.has_value()) {
+        std::cout << "program ret type: "<< ret.type().name() << std::endl;
+        printAny(ret);
+    }
 
 
 /*
