@@ -675,7 +675,7 @@ public:
 class Variable: public Expression{
 public:
     std::string name;
-    std::shared_ptr<AstNode> decl; //指向变量声明
+    VariableDecl* decl{nullptr}; //指向变量声明
     Variable(const std::string& name): name(name){}
     std::any accept(AstVisitor& visitor) override {
         return visitor.visitVariable(*this);
@@ -758,6 +758,7 @@ std::any AstVisitor::visitVariableDecl(VariableDecl& variableDecl) {
         std::cout << "this->visit(variableDecl.init)" << std::endl;
         return this->visit(variableDecl.init);
     }
+    return std::any();
 }
 
 std::any AstVisitor::visitVariable(Variable& variable) {
@@ -1111,6 +1112,89 @@ public:
     }
 };
 
+/**
+ * 符号类型
+ */
+enum class SymKind{Variable, Function, Class, Interface};
+
+/**
+ * 符号表条目
+ */
+struct Symbol{
+    std::string name;
+    VariableDecl* decl{nullptr};
+    SymKind kind;
+    Symbol(const std::string& name, VariableDecl* decl, SymKind kind):
+        name(name), decl(decl), kind(kind){
+    }
+};
+
+class SymTable{
+    std::unordered_map<std::string, std::shared_ptr<Symbol>> table;
+public:
+    void enter(const std::string& name, VariableDecl* decl, SymKind kind){
+        this->table.insert({name, std::make_shared<Symbol>(name,decl,kind)});
+    }
+
+    bool hasSymbol(const std::string& name){
+        return this->table.count(name) > 0;
+    }
+
+    /**
+     * 根据名称查找符号。
+     * @param name 符号名称。
+     * @returns 根据名称查到的Symbol。如果没有查到，则返回null。
+     */
+    std::shared_ptr<Symbol> getSymbol(const std::string& name){
+        auto it = this->table.find(name);
+        if (it != this->table.end()){
+            return it->second;
+        }
+        else{
+            return nullptr;
+        }
+    }
+};
+
+class Enter: public AstVisitor{
+    SymTable& symTable;
+public:
+    Enter(SymTable& symTable): symTable(symTable){}
+
+    /**
+     * 把变量声明加入符号表
+     * @param variableDecl
+     */
+    std::any visitVariableDecl(VariableDecl& variableDecl) override {
+        std::cout << ("visitVariableDecl symbol: "+ variableDecl.name) << std::endl;
+        if (this->symTable.hasSymbol(variableDecl.name)){
+            std::cout << ("Dumplicate symbol: "+ variableDecl.name) << std::endl;
+        }
+        this->symTable.enter(variableDecl.name, &variableDecl, SymKind::Variable);
+
+        return std::any();
+    }
+};
+
+class RefResolver: public AstVisitor{
+    SymTable& symTable;
+public:
+    RefResolver(SymTable& symTable): symTable(symTable){}
+
+    //消解变量引用
+    std::any visitVariable(Variable& variable) override {
+        std::cout << ("visitVariable declaration variable: " + variable.name) << std::endl;
+        auto symbol = this->symTable.getSymbol(variable.name);
+        if (symbol != nullptr && symbol->kind == SymKind::Variable){
+            variable.decl = symbol->decl;
+        }
+        else{
+            std::cout << ("Error: cannot find declaration of variable " + variable.name) << std::endl;
+        }
+        return std::any();
+    }
+};
+
 template<class T, class F>
 inline std::pair<const std::type_index, std::function<void(std::any const&)>>
     to_any_visitor(F const &f)
@@ -1172,18 +1256,26 @@ void compileAndRun(const std::string& program) {
     Scanner tokenizer(charStream);
 
     // Syntax analysis
+    std::cout << "------------Syntax analysis------------" << std::endl;
     auto prog = Parser(tokenizer).parseProg();
     prog->dump("");
 
     // Semantic analysis
+    std::cout << "------------Semantic analysis------------" << std::endl;
+    SymTable symTable;
+    Enter enter(symTable);
+    enter.visit(prog);       //建立符号表
+    RefResolver refResolver(symTable);
+    refResolver.visit(prog); //引用消解
+    prog->dump("");
 
     // run program
     std::cout << "------------run------------" << std::endl;
-    auto ret = Intepretor().visit(prog);
-    if (ret.has_value()) {
-        std::cout << "program ret type: "<< ret.type().name() << std::endl;
-        printAny(ret);
-    }
+    // auto ret = Intepretor().visit(prog);
+    // if (ret.has_value()) {
+        // std::cout << "program ret type: "<< ret.type().name() << std::endl;
+        // printAny(ret);
+    // }
 
 
 /*
