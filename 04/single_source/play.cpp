@@ -1145,8 +1145,55 @@ public:
     }
 };
 
-class Intepretor: public AstVisitor{
+/**
+ * 左值。
+ * 目前先只是指变量。
+ */
+class LeftValue{
 public:
+    Variable& variable;
+    LeftValue(Variable& variable): variable(variable) {}
+}
+;
+
+class Intepretor: public AstVisitor{
+    std::map<std::string, std::any> values;
+public:
+    std::any visitVariableDecl(VariableDecl& variableDecl) override {
+        if(variableDecl.init != nullptr){
+            auto v = this->visit(variableDecl.init);
+            if (this->isLeftValue(v)){
+                std::string name = std::any_cast<LeftValue>(v).variable.name;
+                v = this->getVariableValue(name);
+            }
+            this->setVariableValue(variableDecl.name, v);
+            return v;
+        }
+    }
+
+    std::any visitVariable(Variable& variable) override{
+        // std::cout << ("----visitVariable:" + variable.name) << std::endl;
+        return LeftValue(variable);
+    }
+
+    bool isLeftValue(std::any& v) {
+        return std::type_index(v.type()) == std::type_index(typeid(LeftValue));
+    }
+
+    std::any getVariableValue(const std::string& varName) {
+        std::cout << "getVariableValue: " << varName << std::endl;
+        auto iter = this->values.find(varName);
+        if (iter == this->values.end()) {
+            return std::any();
+        }
+        return iter->second;
+    }
+
+    void setVariableValue(const std::string& varName, std::any value) {
+        std::cout << "setVariableValue: " << varName << std::endl;
+        this->values.insert({varName, value});
+    }
+
     std::any visitBinary(Binary& bi) override {
         std::cout << ("visitBinary:" + bi.op) << std::endl;
 
@@ -1157,12 +1204,38 @@ public:
 
         int v1 = {0};
         int v2 = {0};
-        try {
+
+        if (!va1.has_value()) {
+             std::cout << ("Error: binary op v1 none: " + bi.op) << std::endl;
+            //return std::any();
+        }
+
+        if (!va2.has_value()) {
+            std::cout << ("Error: binary op v2 none: " + bi.op) << std::endl;
+            //return std::any();
+        }
+
+        std::string v1Name;
+        if (std::type_index(va1.type()) == std::type_index(typeid(LeftValue))) {
+            auto leftV1 = std::any_cast<LeftValue>(va1);
+            v1Name = leftV1.variable.name;
+            auto ref = this->getVariableValue(v1Name);
+            v1 = std::any_cast<int>(ref);
+            std::cout << "v1leftValue name: " << v1Name << ": " << toString(v1) << std::endl;
+        } else if (std::type_index(va1.type()) == std::type_index(typeid(int))) {
             v1 = std::any_cast<int>(va1);
+            std::cout << "v1 int: "  << toString(v1) << std::endl;
+        }
+
+        if (std::type_index(va2.type()) == std::type_index(typeid(LeftValue))) {
+            auto leftV2 = std::any_cast<LeftValue>(va2);
+            auto v2Name = leftV2.variable.name;
+            auto ref = this->getVariableValue(v2Name);
+            v2 = std::any_cast<int>(ref);
+            std::cout << "v2leftValue name: " << v2Name << ": " << toString(v2) << std::endl;
+        } else if (std::type_index(va2.type()) == std::type_index(typeid(int))) {
             v2 = std::any_cast<int>(va2);
-        } catch (...) {
-            std::exception_ptr p = std::current_exception();
-            std::clog <<(p ? p.__cxa_exception_type()->name() :"null") << std::endl;
+            std::cout << "v2 int: "  << toString(v1) << std::endl;
         }
 
 
@@ -1188,13 +1261,13 @@ public:
         //     ret = v1 && v2;
         // } else if (bi.op == "||") {
         //     ret = v1 || v2;
-        // } else if (bi.op == "=") {
-        //     if (v1left != nullptr){
-        //         this->setVariableValue(v1left.variable.name, v2);
-        //     }
-        //     else{
-        //         std::cout << ("Assignment need a left value) { ") << std::endl;
-        //     }
+        } else if (bi.op == "=") {
+            if (!v1Name.empty()){
+                this->setVariableValue(v1Name, v2);
+            }
+            else{
+                std::cout << ("Assignment need a left value) { ") << std::endl;
+            }
         }
         else {
             std::cout << ("Unsupported binary operation) { " + bi.op) << std::endl;
@@ -1284,6 +1357,8 @@ void compileAndRun(const std::string& program) {
     if (ret.has_value()) {
         std::cout << "program ret type: "<< ret.type().name() << std::endl;
         printAny(ret);
+    } else {
+        std::cout << "program ret no value" << std::endl;
     }
 
 
