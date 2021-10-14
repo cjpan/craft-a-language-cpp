@@ -77,7 +77,7 @@ inline bool isColorizedOutputEnabled() {
 }
 #else
 inline bool isColorizedOutputEnabled() {
-  return false;
+  return true;
 }
 #endif
 
