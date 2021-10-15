@@ -11,7 +11,25 @@ SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 SET(SRC_FILE "play.cpp"
                        )
-
 add_executable(${PROJECT_NAME} ${SRC_FILE})
-
 include_directories("third_party/dbg-macro/")
+
+set(ENABLE_TESTS ON)
+
+if (ENABLE_TESTS)
+
+    file(GLOB GTEST_FILES  "third_party/googletest-1.10.0/googletest/src/gtest-all.cc"
+                            "third_party/googletest-1.10.0/googletest/src/gmock-all.cc"
+                        )
+    file(GLOB TESTCASE_FILES  "tests/*.cpp")
+
+    include_directories("/")
+    include_directories("third_party/dbg-macro/")
+    include_directories("third_party/googletest-1.10.0/googletest/")
+    include_directories("third_party/googletest-1.10.0/googletest/include/")
+    include_directories("third_party/googletest-1.10.0/googlemock/")
+    include_directories("third_party/googletest-1.10.0/googlemock/include/")
+    add_executable(tests-${PROJECT_NAME} ${GTEST_FILES} ${TESTCASE_FILES})
+
+
+endif()
