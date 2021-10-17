@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string>
+#include "dbg.h"
 
 struct Position {
     uint32_t begin = 1; //开始于哪个字符，从1开始计数
