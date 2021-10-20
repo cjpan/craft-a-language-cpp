@@ -9,9 +9,11 @@ SET(CMAKE_BUILD_TYPE "Debug")
 SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb -DDBG_MACRO_NO_WARNING")
 SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
-SET(SRC_FILE "play.cpp"
+
+SET(MAIN_FILE  "play.cpp")
+SET(SRC_FILE  "types.cpp"
                        )
-add_executable(${PROJECT_NAME} ${SRC_FILE})
+add_executable(${PROJECT_NAME} ${SRC_FILE} ${MAIN_FILE})
 include_directories("third_party/dbg-macro/")
 
 set(ENABLE_TESTS ON)
@@ -29,7 +31,7 @@ if (ENABLE_TESTS)
     include_directories("third_party/googletest-1.10.0/googletest/include/")
     include_directories("third_party/googletest-1.10.0/googlemock/")
     include_directories("third_party/googletest-1.10.0/googlemock/include/")
-    add_executable(tests-${PROJECT_NAME} ${GTEST_FILES} ${TESTCASE_FILES})
+    add_executable(tests-${PROJECT_NAME} ${GTEST_FILES} ${SRC_FILE} ${TESTCASE_FILES})
 
 
 endif()

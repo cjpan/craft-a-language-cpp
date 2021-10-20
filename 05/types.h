@@ -43,14 +43,16 @@ public:
     virtual bool hasVoid() = 0;
 
     virtual std::string toString() = 0;
+
+    virtual bool isSimpleType() = 0;
+    virtual bool isFunctionType() = 0;
+
+    virtual bool LE(Type& type2) = 0;
+
+    static Type& getUpperBound(Type& type1, Type& type2);
 };
 
-bool operator==(const Type& ls, const Type& rs) {
-    if (ls.name == rs.name) {
-        return true;
-    }
-    return false;
-}
+bool operator==(const Type& ls, const Type& rs);
 
 class SimpleType: public Type{
     std::vector<Type*> upperTypes;
@@ -59,11 +61,9 @@ public:
         Type(name), upperTypes(upperTypes){
     }
 
-    bool hasVoid() {
-        return false;
-    }
+    bool hasVoid() override;
 
-    std::string toString() {
+    std::string toString() override {
         std::string upperTypeNames = "[";
         for (auto ut: this->upperTypes){
             upperTypeNames += ut->name +", ";
@@ -71,6 +71,15 @@ public:
         upperTypeNames += "]";
         return "SimpleType {name: " + this->name + ", upperTypes: " + upperTypeNames+ "}";
     }
+
+    bool isSimpleType() override {
+        return true;
+    }
+    bool isFunctionType() override {
+        return false;
+    }
+
+    bool LE(Type& type2);
 };
 
 class SysTypes {
@@ -102,26 +111,6 @@ public:
     }
 };
 
-//所有类型的父类型
-SimpleType SysTypes::Any{"any", {}};
-
-//基础类型
-SimpleType SysTypes::String{"string",{&SysTypes::Any}};
-SimpleType SysTypes::Number{"number",{&SysTypes::Any}};
-SimpleType SysTypes::Boolean{"boolean", {&SysTypes::Any}};
-
-//所有类型的子类型
-SimpleType SysTypes::Null{"null"};
-SimpleType SysTypes::Undefined{"undefined"};
-
-//函数没有任何返回值的情况
-//如果作为变量的类型，则智能赋值为null和undefined
-SimpleType SysTypes::Void{"void"};
-
-//两个Number的子类型
-SimpleType SysTypes::Integer{"integer", {&SysTypes::Number}};
-SimpleType SysTypes::Decimal{"decimal", {&SysTypes::Number}};
-
 
 class FunctionType: public Type{
 public:
@@ -139,11 +128,18 @@ public:
 
     }
 
-    bool hasVoid() {
+    bool hasVoid() override {
         return this->returnType->hasVoid();
     }
 
-    std::string toString(){
+    bool isSimpleType() override {
+        return false;
+    }
+    bool isFunctionType() override {
+        return true;
+    }
+
+    std::string toString() override {
         std::string paramTypeNames = "[";
         for (auto ut: this->paramTypes){
             paramTypeNames += ut->name +", ";
@@ -151,9 +147,32 @@ public:
         paramTypeNames += "]";
         return "FunctionType {name: " + this->name + ", returnType: " + this->returnType->name + ", paramTypes: " + paramTypeNames+ "}";
     }
+
+    bool LE(Type& type2) override {
+        if (type2 == SysTypes::Any){
+             return true;
+        }
+        else if (*this == type2){
+            return true;
+        }
+        // else if (Type.isUnionType(type2)){
+            // let t = type2 as UnionType;
+            // if (t.types.indexOf(this)!=-1){
+                // return true;
+            // }
+            // else{
+                // return false;
+            // }
+        // }
+        else{
+            return false;
+        }
+
+        return false;
+    }
 };
 
-int32_t FunctionType::index = {0};
+
 
 
 #endif
