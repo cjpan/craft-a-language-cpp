@@ -135,4 +135,5 @@ public:
     }
 };
 
+extern std::map<std::string, FunctionSymbol&> built_ins;
 #endif
