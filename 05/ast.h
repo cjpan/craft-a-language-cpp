@@ -8,11 +8,15 @@
 #include <any>
 
 class AstNode;
+class ErrorStmt;
 class AstVisitor{
 public:
     //对抽象类的访问。
     //相应的具体类，会调用visitor合适的具体方法。
     virtual std::any visit(AstNode& node, std::any additional = std::any());
+    virtual std::any visitErrorStmt(AstNode& node, std::any additional = std::any()) {
+        return std::any();
+    }
 };
 
 
@@ -32,6 +36,10 @@ public:
 
 
 class Statement: public AstNode{
+public:
+    Statement(Position beginPos, Position endPos, bool isErrorNode):
+        AstNode(beginPos, endPos, true){
+    }
 };
 
 class Decl: public AstNode{
@@ -39,6 +47,16 @@ public:
     std::string name;
     Decl(Position beginPos, Position endPos, const std::string& name, bool isErrorNode):
         AstNode(beginPos, endPos, isErrorNode), name(name){
+    }
+};
+
+class ErrorStmt: public Statement{
+public:
+    ErrorStmt(Position beginPos, Position endPos):
+        Statement(beginPos, endPos, true){
+    }
+    std::any accept(AstVisitor& visitor, std::any additional) {
+        return visitor.visitErrorStmt(*this, additional);
     }
 };
 
