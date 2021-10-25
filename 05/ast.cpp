@@ -1,10 +1,10 @@
 #include "ast.h"
 
-std::any AstVisitor::visit(AstNode& node, std::any additional) {
+std::any AstVisitor::visit(AstNode& node, std::string additional) {
     return node.accept(*this, additional);
 }
 
-std::any AstVisitor::visitParameterList(ParameterList& paramList, std::any additional) {
+std::any AstVisitor::visitParameterList(ParameterList& paramList, std::string additional) {
     std::any retVal;
     for(auto x:  paramList.params){
         retVal = this->visit(*x, additional);
@@ -12,25 +12,37 @@ std::any AstVisitor::visitParameterList(ParameterList& paramList, std::any addit
     return retVal;
 }
 
-std::any AstVisitor::visitVariableDecl(VariableDecl& variableDecl, std::any additional) {
+std::any AstVisitor::visitVariableDecl(VariableDecl& variableDecl, std::string additional) {
     if (variableDecl.init != nullptr){
         return this->visit(*variableDecl.init, additional);
     }
     return std::any();
 }
 
-std::any AstVisitor::visitVariableStatement(VariableStatement& variableStmt, std::any additional) {
+std::any AstVisitor::visitVariableStatement(VariableStatement& variableStmt, std::string additional) {
     return this->visit(*variableStmt.variableDecl, additional);
 }
 
-std::any AstVisitor::visitExpressionStatement(ExpressionStatement& stmt, std::any additional) {
+std::any AstVisitor::visitExpressionStatement(ExpressionStatement& stmt, std::string additional) {
     return this->visit(*stmt.exp, additional);
 }
 
-std::any AstVisitor::visitFunctionCall(FunctionCall& functionCall, std::any additional) {
+std::any AstVisitor::visitFunctionCall(FunctionCall& functionCall, std::string additional) {
     for(auto param: functionCall.arguments){
         // console.log("in AstVisitor.visitFunctionCall, visiting param: "+ param.dump(""));
         this->visit(*param, additional);
     }
     return std::any();
+}
+
+std::any AstVisitor::visitBlock(Block& block, std::string additional) {
+        std::any retVal;
+        for(auto x: block.stmts){
+            retVal = this->visit(*x, additional);
+        }
+        return retVal;
+}
+
+std::any AstVisitor::visitProg(Prog& prog, std::string additional) {
+    return this->visitBlock(prog, additional);
 }

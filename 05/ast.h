@@ -2,8 +2,11 @@
 #define __AST_H_
 
 #include "error.h"
+#include "scope.h"
 #include "types.h"
 #include "symbol.h"
+#include "dbg.h"
+
 #include <string>
 #include <map>
 #include <memory>
@@ -19,31 +22,36 @@ class VariableDecl;
 class VariableStatement;
 class ExpressionStatement;
 class FunctionCall;
+class Block;
+class Prog;
 class AstVisitor{
 public:
     //对抽象类的访问。
     //相应的具体类，会调用visitor合适的具体方法。
-    virtual std::any visit(AstNode& node, std::any additional = std::any());
+    virtual std::any visit(AstNode& node, std::string additional = "");
 
 
-    virtual std::any visitParameterList(ParameterList& paramList, std::any additional = std::any());
+    virtual std::any visitParameterList(ParameterList& paramList, std::string additional = "");
 
-    virtual std::any visitVariableDecl(VariableDecl& variableDecl, std::any additional = std::any());
+    virtual std::any visitVariableDecl(VariableDecl& variableDecl, std::string additional = "");
 
-    virtual std::any visitVariableStatement(VariableStatement& variableStmt, std::any additional = std::any());
+    virtual std::any visitVariableStatement(VariableStatement& variableStmt, std::string additional = "");
 
-    virtual std::any visitExpressionStatement(ExpressionStatement& stmt, std::any additional = std::any());
+    virtual std::any visitExpressionStatement(ExpressionStatement& stmt, std::string additional = "");
 
-    virtual std::any visitFunctionCall(FunctionCall& functionCall, std::any additional = std::any());
+    virtual std::any visitFunctionCall(FunctionCall& functionCall, std::string additional = "");
+
+    virtual std::any visitBlock(Block& block, std::string additional = "");
+    virtual std::any visitProg(Prog& prog, std::string additional = "");
 
 
-    virtual std::any visitVariable(Variable& node, std::any additional = std::any()) {
+    virtual std::any visitVariable(Variable& node, std::string additional = "") {
         return std::any();
     }
-    virtual std::any visitIntegerLiteral(IntegerLiteral& node, std::any additional = std::any()) {
+    virtual std::any visitIntegerLiteral(IntegerLiteral& node, std::string additional = "") {
         return std::any();
     }
-    virtual std::any visitErrorStmt(ErrorStmt& node, std::any additional = std::any()) {
+    virtual std::any visitErrorStmt(ErrorStmt& node, std::string additional = "") {
         return std::any();
     }
 };
@@ -60,7 +68,7 @@ public:
     }
 
     //visitor模式中，用于接受vistor的访问。
-    virtual std::any accept(AstVisitor& visitor, std::any additional) = 0;
+    virtual std::any accept(AstVisitor& visitor, std::string additional) = 0;
 };
 
 
@@ -84,7 +92,7 @@ public:
     ErrorStmt(Position beginPos, Position endPos):
         Statement(beginPos, endPos, true){
     }
-    std::any accept(AstVisitor& visitor, std::any additional) {
+    std::any accept(AstVisitor& visitor, std::string additional) {
         return visitor.visitErrorStmt(*this, additional);
     }
 };
@@ -116,7 +124,7 @@ public:
     ExpressionStatement(Position endPos, std::shared_ptr<AstNode> exp, bool isErrorNode = false):
         Statement(exp->beginPos, endPos,isErrorNode), exp(exp) {
     }
-    std::any accept(AstVisitor& visitor, std::any additional) override {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitExpressionStatement(*this, additional);
     }
 };
@@ -129,7 +137,7 @@ public:
         this->theType = &SysTypes::Integer;
         this->constValue = value;
     }
-    std::any accept(AstVisitor& visitor, std::any additional) override {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitIntegerLiteral(*this, additional);
     }
 };
@@ -148,7 +156,7 @@ public:
         bool isErrorNode = false): Expression(beginPos, beginPos, isErrorNode),
         name(name), arguments(paramValues){
     }
-    std::any accept(AstVisitor& visitor, std::any additional) override {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitFunctionCall(*this, additional);
     }
 };
@@ -160,7 +168,7 @@ public:
         std::vector<std::shared_ptr<AstNode>>& params, bool isErrorNode = false):
         AstNode(beginPos, endPos, isErrorNode), params(params) {
     }
-    std::any accept(AstVisitor& visitor, std::any additional) override {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitParameterList(*this, additional);
     }
 };
@@ -175,7 +183,7 @@ public:
     Variable(Position beginPos, Position endPos, const std::string& name, bool isErrorNode):
         Expression(beginPos, endPos, isErrorNode), name(name){
     }
-    std::any accept(AstVisitor& visitor, std::any additional) override {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitVariable(*this, additional);
     }
 };
@@ -191,7 +199,7 @@ public:
     VariableDecl(Position beginPos, Position endPos,const std::string& name, Type* theType, std::shared_ptr<Expression>& init, bool isErrorNode = false):
         Decl(beginPos, endPos,name, isErrorNode),theType(theType), init(init) {
     }
-    std::any accept(AstVisitor& visitor, std::any additional) override {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitVariableDecl(*this, additional);
     }
 };
@@ -204,8 +212,114 @@ public:
     VariableStatement(Position beginPos, Position endPos,std::shared_ptr<AstNode> variableDecl, bool isErrorNode = false):
         Statement(beginPos, endPos, isErrorNode), variableDecl(variableDecl){
     }
-    std::any accept(AstVisitor& visitor, std::any additional) override {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitVariableStatement(*this, additional);
+    }
+};
+
+class Block: public Statement{
+public:
+    std::vector<std::shared_ptr<AstNode>> stmts;
+    std::shared_ptr<Scope> scope;
+    Block(Position beginPos, Position endPos, std::vector<std::shared_ptr<AstNode>>& stmts, bool isErrorNode = false):
+        Statement(beginPos, endPos, isErrorNode), stmts(stmts){
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitBlock(*this, additional);
+    }
+};
+
+class Prog: public Block{
+public:
+    // stmts:Statement[];
+    std::shared_ptr<FunctionSymbol> sym;
+    Prog(Position beginPos, Position endPos, std::vector<std::shared_ptr<AstNode>>& stmts): Block(beginPos, endPos, stmts){
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitProg(*this,additional);
+    }
+};
+
+
+class AstDumper: public AstVisitor{
+public:
+    std::any visitParameterList(ParameterList& paramList, std::string prefix) override {
+        dbg(prefix+"ParamList:" + (paramList.isErrorNode? " **E** " : "") + (paramList.params.size()== 0 ? "none":""));
+        for(auto x: paramList.params){
+            this->visit(*x, prefix+"    ");
+        }
+        return std::any();
+    }
+
+    std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
+        dbg(prefix+"VariableDecl "+variableDecl.name +
+            (variableDecl.theType == nullptr? "" : "("+variableDecl.theType->name+")") +
+            (variableDecl.isErrorNode? " **E** " : ""));
+        if (variableDecl.init == nullptr){
+            dbg(prefix+"no initialization.");
+        }
+        else{
+            this->visit(*variableDecl.init, prefix+"    ");
+        }
+        return std::any();
+    }
+
+    std::any visitVariableStatement(VariableStatement& variableStmt, std::string prefix) override {
+        dbg(prefix+"VariableStatement " + (variableStmt.isErrorNode? " **E** " : ""));
+        return this->visit(*variableStmt.variableDecl, prefix+"    ");
+    }
+
+    std::any visitExpressionStatement(ExpressionStatement& stmt, std::string prefix) override {
+        dbg(prefix+"ExpressionStatement" + (stmt.isErrorNode? " **E** " : ""));
+        return this->visit(*stmt.exp, prefix+"    ");
+    }
+
+    std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
+        dbg(prefix+"FunctionCall "+ (functionCall.theType == nullptr? "" : "("+functionCall.theType->name+")") +
+            (functionCall.isErrorNode? " **E** " : "")+functionCall.name +
+            (built_ins.count(functionCall.name) > 0 ? ", built-in" :
+             functionCall.sym!=nullptr ? ", resolved" : ", not resolved"));
+        for(auto param: functionCall.arguments){
+            this->visit(*param, prefix+"    ");
+        }
+        return std::any();
+    }
+
+    std::any visitProg(Prog& prog, std::string prefix) override {
+        dbg(prefix + "Prog"+ (prog.isErrorNode? " **E** " : ""));
+        for(auto x: prog.stmts){
+            this->visit(*x, prefix+"    ");
+        }
+        return std::any();
+    }
+
+    std::any visitBlock(Block& block, std::string prefix) override {
+        if(block.isErrorNode){
+            dbg(prefix + "Block" + (block.isErrorNode? " **E** " : ""));
+        }
+        for(auto x: block.stmts){
+            this->visit(*x, prefix+"    ");
+        }
+        return std::any();
+    }
+
+
+    std::any visitVariable(Variable& variable, std::string prefix) override {
+        dbg(prefix+"Variable: "+ (variable.isErrorNode? " **E** " : "")+
+            variable.name + (variable.theType == nullptr? "" : "("+variable.theType->name+")") +
+            (variable.isLeftValue ? ", LeftValue" : "") +
+            (variable.sym != nullptr ? ", resolved" : ", not resolved"));
+            return std::any();
+    }
+    std::any visitIntegerLiteral(IntegerLiteral& exp, std::string prefix) override {
+        dbg(prefix+ std::to_string(exp.value) +
+            (exp.theType == nullptr? "" : "("+exp.theType->name+")") +
+            (exp.isErrorNode? " **E** " : ""));
+        return std::any();
+    }
+    std::any visitErrorStmt(ErrorStmt& node, std::string prefix) override {
+        dbg(prefix+"Error Statement **E**");
+        return std::any();
     }
 };
 
