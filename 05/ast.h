@@ -193,10 +193,10 @@ public:
 class VariableDecl: public Decl{
 public:
     Type* theType{nullptr};       //变量类型
-    std::shared_ptr<Expression> init; //变量初始化所使用的表达式
+    std::shared_ptr<AstNode> init; //变量初始化所使用的表达式
     std::shared_ptr<VarSymbol> sym;
     Type* inferredType{nullptr}; //推测出的类型
-    VariableDecl(Position beginPos, Position endPos,const std::string& name, Type* theType, std::shared_ptr<Expression>& init, bool isErrorNode = false):
+    VariableDecl(Position beginPos, Position endPos,const std::string& name, Type* theType, std::shared_ptr<AstNode>& init, bool isErrorNode = false):
         Decl(beginPos, endPos,name, isErrorNode),theType(theType), init(init) {
     }
     std::any accept(AstVisitor& visitor, std::string additional) override {
