@@ -46,3 +46,22 @@ std::any AstVisitor::visitBlock(Block& block, std::string additional) {
 std::any AstVisitor::visitProg(Prog& prog, std::string additional) {
     return this->visitBlock(prog, additional);
 }
+
+std::any AstVisitor::visitCallSignature(CallSignature& callSinature, std::string additional) {
+    if (callSinature.paramList!=nullptr){
+        return this->visit(*callSinature.paramList, additional);
+    }
+    return std::any();
+}
+
+std::any AstVisitor::visitFunctionDecl(FunctionDecl& functionDecl, std::string additional) {
+    this->visit(*functionDecl.callSignature, additional);
+    return this->visit(*functionDecl.body, additional);
+}
+
+std::any AstVisitor::visitReturnStatement(ReturnStatement& stmt, std::string additional) {
+    if (stmt.exp != nullptr){
+        return this->visit(*stmt.exp, additional);
+    }
+    return std::any();
+}

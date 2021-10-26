@@ -25,6 +25,9 @@ class ExpressionStatement;
 class FunctionCall;
 class Block;
 class Prog;
+class CallSignature;
+class FunctionDecl;
+class ReturnStatement;
 class AstVisitor{
 public:
     //对抽象类的访问。
@@ -41,6 +44,11 @@ public:
     virtual std::any visitExpressionStatement(ExpressionStatement& stmt, std::string additional = "");
 
     virtual std::any visitFunctionCall(FunctionCall& functionCall, std::string additional = "");
+
+    virtual std::any visitCallSignature(CallSignature& callSinature, std::string additional = "");
+
+    virtual std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string additional = "");
+    virtual std::any visitReturnStatement(ReturnStatement& stmt, std::string additional = "");
 
     virtual std::any visitBlock(Block& block, std::string additional = "");
     virtual std::any visitProg(Prog& prog, std::string additional = "");
@@ -241,6 +249,58 @@ public:
     }
 };
 
+/**
+ * 调用签名
+ * 可以用在函数声明等多个地方。
+ */
+class CallSignature: public AstNode{
+public:
+    std::shared_ptr<ParameterList> paramList;
+    Type* theType;       //返回值类型
+    CallSignature(Position beginPos, Position endPos,
+        std::shared_ptr<ParameterList>& paramList, Type* theType,
+        bool isErrorNode = false): AstNode(beginPos, endPos, isErrorNode),
+        paramList(paramList), theType(theType){
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitCallSignature(*this, additional);
+    }
+};
+
+/**
+ * 函数声明节点
+ */
+class FunctionDecl: public Decl{
+public:
+    std::shared_ptr<CallSignature> callSignature;
+    std::shared_ptr<Block> body; //函数体
+    std::shared_ptr<Scope> scope; //该函数对应的Scope
+    std::shared_ptr<FunctionSymbol> sym;
+    FunctionDecl(Position beginPos, const std::string& name,
+        std::shared_ptr<CallSignature>& callSignature,
+        std::shared_ptr<Block>& body, bool isErrorNode = false):
+        Decl(beginPos, endPos,name, isErrorNode),
+        callSignature(callSignature), body(body){
+
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitFunctionDecl(*this, additional);
+    }
+};
+
+/**
+ * Return语句
+ */
+class ReturnStatement: public Statement{
+public:
+    std::shared_ptr<Expression> exp;
+    ReturnStatement(Position beginPos, Position endPos, std::shared_ptr<Expression>& exp,bool isErrorNode = false):
+        Statement(beginPos, endPos, isErrorNode), exp(exp){
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitReturnStatement(*this, additional);
+    }
+};
 
 class AstDumper: public AstVisitor{
 public:
@@ -322,6 +382,33 @@ public:
         Print(prefix+"Error Statement **E**");
         return std::any();
     }
+
+    std::any visitCallSignature(CallSignature& callSinature, std::string prefix) override {
+        Print(prefix+ (callSinature.isErrorNode? " **E** " : "")+"Return type: " + callSinature.theType->name);
+        if (callSinature.paramList!=nullptr){
+            this->visit(*callSinature.paramList, prefix + "    ");
+        }
+
+        return std::any();
+    }
+
+    std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
+        Print(prefix+"FunctionDecl "+ functionDecl.name + (functionDecl.isErrorNode? " **E** " : ""));
+        this->visit(*functionDecl.callSignature, prefix+"    ");
+        this->visit(*functionDecl.body, prefix+"    ");
+
+        return std::any();
+    }
+
+    std::any visitReturnStatement(ReturnStatement& stmt, std::string prefix) override {
+        Print(prefix+"ReturnStatement" + (stmt.isErrorNode? " **E** " : ""));
+        if (stmt.exp != nullptr){
+            return this->visit(*stmt.exp, prefix+"    ");
+        }
+
+        return std::any();
+    }
+
 };
 
 #endif
