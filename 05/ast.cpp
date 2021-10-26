@@ -65,3 +65,9 @@ std::any AstVisitor::visitReturnStatement(ReturnStatement& stmt, std::string add
     }
     return std::any();
 }
+
+std::any AstVisitor::visitBinary(Binary& exp, std::string additional) {
+    this->visit(*exp.exp1, additional);
+    this->visit(*exp.exp2, additional);
+    return std::any();
+}

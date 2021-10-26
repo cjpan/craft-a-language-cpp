@@ -1,6 +1,7 @@
 #ifndef __AST_H_
 #define __AST_H_
 
+#include "scanner.h"
 #include "error.h"
 #include "scope.h"
 #include "types.h"
@@ -28,6 +29,8 @@ class Prog;
 class CallSignature;
 class FunctionDecl;
 class ReturnStatement;
+class Binary;
+
 class AstVisitor{
 public:
     //对抽象类的访问。
@@ -53,6 +56,7 @@ public:
     virtual std::any visitBlock(Block& block, std::string additional = "");
     virtual std::any visitProg(Prog& prog, std::string additional = "");
 
+    virtual std::any visitBinary(Binary& exp, std::string additional = "");
 
     virtual std::any visitVariable(Variable& node, std::string additional = "") {
         return std::any();
@@ -302,6 +306,20 @@ public:
     }
 };
 
+class Binary: public Expression{
+public:
+    Op op;      //运算符
+    std::shared_ptr<AstNode> exp1; //左边的表达式
+    std::shared_ptr<AstNode> exp2; //右边的表达式
+    Binary(Op op, std::shared_ptr<AstNode> exp1, std::shared_ptr<AstNode> exp2,
+        bool isErrorNode = false): Expression(beginPos, endPos, isErrorNode),
+        exp1(exp1), exp2(exp2) {
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitBinary(*this, additional);
+    }
+};
+
 class AstDumper: public AstVisitor{
 public:
     std::any visitParameterList(ParameterList& paramList, std::string prefix) override {
@@ -409,6 +427,13 @@ public:
         return std::any();
     }
 
+    std::any visitBinary(Binary& exp, std::string prefix) {
+        Print(prefix+"Binary:"+ toString(exp.op)+ (exp.theType == nullptr? "" : "("+exp.theType->name+")") + (exp.isErrorNode? " **E** " : ""));
+
+        this->visit(*exp.exp1, prefix+"    ");
+        this->visit(*exp.exp2, prefix+"    ");
+        return std::any();
+    }
 };
 
 #endif
