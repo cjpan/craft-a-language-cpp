@@ -5,7 +5,9 @@
 
 TEST(AST, Ast_default)
 {
-    std::string name = "a";
+    // let r:number = 4;
+    // println(circleArea(r));
+
     Position pos;
     auto type = SysTypes::Integer;
 
@@ -13,8 +15,8 @@ TEST(AST, Ast_default)
     std::shared_ptr<AstNode> var = std::make_shared<VariableDecl>(pos, pos, "r", &type, init);
     std::shared_ptr<AstNode> stmt1 = std::make_shared<VariableStatement>(pos, pos, var);
 
-    std::shared_ptr<AstNode> varUse = std::make_shared<Variable>(pos, pos, "r");
-    std::vector<std::shared_ptr<AstNode>> parms {varUse};
+    std::shared_ptr<AstNode> varRef = std::make_shared<Variable>(pos, pos, "r");
+    std::vector<std::shared_ptr<AstNode>> parms {varRef};
     std::shared_ptr<AstNode> function = std::make_shared<FunctionCall>(pos, pos, "println", parms);
     std::shared_ptr<AstNode> stmt2 = std::make_shared<ExpressionStatement>(pos, function);
 
