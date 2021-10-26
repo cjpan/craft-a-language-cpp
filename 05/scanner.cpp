@@ -11,13 +11,78 @@ std::unordered_map<TokenKind, std::string> tokenToString {
     {TokenKind::Eof, "Eof"},
 };
 
+
+std::unordered_map<Op, std::string> OpToString {
+    {Op::QuestionMark,                "QuestionMark"              },   //?   让几个类型的code取值不重叠
+    {Op::Ellipsis,                    "Ellipsis"                  },    //...
+    {Op::Dot,                         "Dot"                       },    //.
+    {Op::Comma,                       "Comma"                     },    //"
+    {Op::At,                          "At"                        },    //@
+
+    {Op::RightShiftArithmetic,        "RightShiftArithmetic"      },    //>>
+    {Op::LeftShiftArithmetic,         "LeftShiftArithmetic"       },    //<<
+    {Op::RightShiftLogical,           "RightShiftLogical"         },    //>>>
+    {Op::IdentityEquals,              "IdentityEquals"            },    //===
+    {Op::IdentityNotEquals,           "IdentityNotEquals"         },    //!==
+
+    {Op::BitNot,                      "BitNot"                    },    //~
+    {Op::BitAnd,                      "BitAnd"                    },    //&
+    {Op::BitXOr,                      "BitXOr"                    },    //^
+    {Op::BitOr,                       "BitOr"                     },    //|
+
+    {Op::Not,                         "Not"                       },    //!
+    {Op::And,                         "And"                       },    //&&
+    {Op::Or,                          "Or"                        },    //||
+
+    {Op::Assign,                      "Assign"                    },    //=
+    {Op::MultiplyAssign,              "MultiplyAssign"            },    //*=
+    {Op::DivideAssign,                "DivideAssign"              },    ///=
+    {Op::ModulusAssign,               "ModulusAssign"             },    //%=
+    {Op::PlusAssign,                  "PlusAssign"                },    //+=
+    {Op::MinusAssign,                 "MinusAssign"               },    //-=
+    {Op::LeftShiftArithmeticAssign,   "LeftShiftArithmeticAssign" },    //<<=
+    {Op::RightShiftArithmeticAssign,  "RightShiftArithmeticAssign"},    //>>=
+    {Op::RightShiftLogicalAssign,     "RightShiftLogicalAssign"   },    //>>>=
+    {Op::BitAndAssign,                "BitAndAssign"              },    //&=
+    {Op::BitXorAssign,                "BitXorAssign"              },    //^=
+    {Op::BitOrAssign,                 "BitOrAssign"               },    //|=
+
+    {Op::ARROW,                       "ARROW"                     },    //=>
+
+    {Op::Inc,                         "Inc"                       },    //++
+    {Op::Dec,                         "Dec"                       },    //--
+
+    {Op::Plus,                        "Plus"                      },    //+
+    {Op::Minus,                       "Minus"                     },    //-
+    {Op::Multiply,                    "Multiply"                  },    //*
+    {Op::Divide,                      "Divide"                    },    ///
+    {Op::Modulus,                     "Modulus"                   },    //%
+
+    {Op::EQ,                          "EQ"                        },    //==
+    {Op::NE,                          "NE"                        },    //!=
+    {Op::G,                           "G"                         },    //>
+    {Op::GE,                          "GE"                        },    //>=
+    {Op::L,                           "L"                         },    //<
+    {Op::LE,                          "LE"                        },    //<=
+};
+
+
 std::string toString(TokenKind kind) {
     auto it = tokenToString.find(kind);
     if (it != tokenToString.end()) {
         return it->second;
     }
 
-    return "Unknow";
+    return "Unknow Kind";
+}
+
+std::string toString(Op op) {
+    auto it = OpToString.find(op);
+    if (it != OpToString.end()) {
+        return it->second;
+    }
+
+    return "Unknow Op";
 }
 
 std::unordered_map<std::string, KeywordKind> Scanner::KeywordMap {

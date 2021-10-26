@@ -133,6 +133,7 @@ inline std::string toString(uint32_t obj) {
 }
 
 std::string toString(TokenKind kind);
+std::string toString(Op op);
 
 struct Token{
     TokenKind kind;
