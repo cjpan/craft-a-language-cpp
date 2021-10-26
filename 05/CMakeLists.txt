@@ -13,6 +13,7 @@ SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 SET(MAIN_FILE  "play.cpp")
 SET(SRC_FILE  "types.cpp"
               "symbol.cpp"
+              "common.cpp"
               "ast.cpp"
                        )
 add_executable(${PROJECT_NAME} ${SRC_FILE} ${MAIN_FILE})

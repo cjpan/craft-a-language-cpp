@@ -6,6 +6,7 @@
 #include "types.h"
 #include "symbol.h"
 #include "dbg.h"
+#include "common.h"
 
 #include <string>
 #include <map>
@@ -121,7 +122,7 @@ public:
 class ExpressionStatement: public Statement{
 public:
     std::shared_ptr<AstNode> exp;
-    ExpressionStatement(Position endPos, std::shared_ptr<AstNode> exp, bool isErrorNode = false):
+    ExpressionStatement(Position endPos, std::shared_ptr<AstNode>& exp, bool isErrorNode = false):
         Statement(exp->beginPos, endPos,isErrorNode), exp(exp) {
     }
     std::any accept(AstVisitor& visitor, std::string additional) override {
@@ -180,7 +181,7 @@ class Variable: public Expression{
 public:
     std::string name;
     std::shared_ptr<Symbol> sym;
-    Variable(Position beginPos, Position endPos, const std::string& name, bool isErrorNode):
+    Variable(Position beginPos, Position endPos, const std::string& name, bool isErrorNode = false):
         Expression(beginPos, endPos, isErrorNode), name(name){
     }
     std::any accept(AstVisitor& visitor, std::string additional) override {
@@ -244,7 +245,7 @@ public:
 class AstDumper: public AstVisitor{
 public:
     std::any visitParameterList(ParameterList& paramList, std::string prefix) override {
-        dbg(prefix+"ParamList:" + (paramList.isErrorNode? " **E** " : "") + (paramList.params.size()== 0 ? "none":""));
+        Print(prefix+"ParamList:" + (paramList.isErrorNode? " **E** " : "") + (paramList.params.size()== 0 ? "none":""));
         for(auto x: paramList.params){
             this->visit(*x, prefix+"    ");
         }
@@ -252,11 +253,11 @@ public:
     }
 
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
-        dbg(prefix+"VariableDecl "+variableDecl.name +
+        Print(prefix+"VariableDecl "+variableDecl.name +
             (variableDecl.theType == nullptr? "" : "("+variableDecl.theType->name+")") +
             (variableDecl.isErrorNode? " **E** " : ""));
         if (variableDecl.init == nullptr){
-            dbg(prefix+"no initialization.");
+            Print(prefix+"no initialization.");
         }
         else{
             this->visit(*variableDecl.init, prefix+"    ");
@@ -265,17 +266,17 @@ public:
     }
 
     std::any visitVariableStatement(VariableStatement& variableStmt, std::string prefix) override {
-        dbg(prefix+"VariableStatement " + (variableStmt.isErrorNode? " **E** " : ""));
+        Print(prefix+"VariableStatement " + (variableStmt.isErrorNode? " **E** " : ""));
         return this->visit(*variableStmt.variableDecl, prefix+"    ");
     }
 
     std::any visitExpressionStatement(ExpressionStatement& stmt, std::string prefix) override {
-        dbg(prefix+"ExpressionStatement" + (stmt.isErrorNode? " **E** " : ""));
+        Print(prefix+"ExpressionStatement" + (stmt.isErrorNode? " **E** " : ""));
         return this->visit(*stmt.exp, prefix+"    ");
     }
 
     std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
-        dbg(prefix+"FunctionCall "+ (functionCall.theType == nullptr? "" : "("+functionCall.theType->name+")") +
+        Print(prefix+"FunctionCall "+ (functionCall.theType == nullptr? "" : "("+functionCall.theType->name+")") +
             (functionCall.isErrorNode? " **E** " : "")+functionCall.name +
             (built_ins.count(functionCall.name) > 0 ? ", built-in" :
              functionCall.sym!=nullptr ? ", resolved" : ", not resolved"));
@@ -286,7 +287,7 @@ public:
     }
 
     std::any visitProg(Prog& prog, std::string prefix) override {
-        dbg(prefix + "Prog"+ (prog.isErrorNode? " **E** " : ""));
+        Print(prefix + "Prog"+ (prog.isErrorNode? " **E** " : ""));
         for(auto x: prog.stmts){
             this->visit(*x, prefix+"    ");
         }
@@ -295,7 +296,7 @@ public:
 
     std::any visitBlock(Block& block, std::string prefix) override {
         if(block.isErrorNode){
-            dbg(prefix + "Block" + (block.isErrorNode? " **E** " : ""));
+            Print(prefix + "Block" + (block.isErrorNode? " **E** " : ""));
         }
         for(auto x: block.stmts){
             this->visit(*x, prefix+"    ");
@@ -305,20 +306,20 @@ public:
 
 
     std::any visitVariable(Variable& variable, std::string prefix) override {
-        dbg(prefix+"Variable: "+ (variable.isErrorNode? " **E** " : "")+
+        Print(prefix+"Variable: "+ (variable.isErrorNode? " **E** " : "")+
             variable.name + (variable.theType == nullptr? "" : "("+variable.theType->name+")") +
             (variable.isLeftValue ? ", LeftValue" : "") +
             (variable.sym != nullptr ? ", resolved" : ", not resolved"));
             return std::any();
     }
     std::any visitIntegerLiteral(IntegerLiteral& exp, std::string prefix) override {
-        dbg(prefix+ std::to_string(exp.value) +
+        Print(prefix+ std::to_string(exp.value) +
             (exp.theType == nullptr? "" : "("+exp.theType->name+")") +
             (exp.isErrorNode? " **E** " : ""));
         return std::any();
     }
     std::any visitErrorStmt(ErrorStmt& node, std::string prefix) override {
-        dbg(prefix+"Error Statement **E**");
+        Print(prefix+"Error Statement **E**");
         return std::any();
     }
 };
