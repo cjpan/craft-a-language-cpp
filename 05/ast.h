@@ -259,10 +259,10 @@ public:
  */
 class CallSignature: public AstNode{
 public:
-    std::shared_ptr<ParameterList> paramList;
+    std::shared_ptr<AstNode> paramList;
     Type* theType;       //返回值类型
     CallSignature(Position beginPos, Position endPos,
-        std::shared_ptr<ParameterList>& paramList, Type* theType,
+        std::shared_ptr<AstNode>& paramList, Type* theType,
         bool isErrorNode = false): AstNode(beginPos, endPos, isErrorNode),
         paramList(paramList), theType(theType){
     }
@@ -276,13 +276,13 @@ public:
  */
 class FunctionDecl: public Decl{
 public:
-    std::shared_ptr<CallSignature> callSignature;
-    std::shared_ptr<Block> body; //函数体
+    std::shared_ptr<AstNode> callSignature;
+    std::shared_ptr<AstNode> body; //函数体
     std::shared_ptr<Scope> scope; //该函数对应的Scope
     std::shared_ptr<FunctionSymbol> sym;
     FunctionDecl(Position beginPos, const std::string& name,
-        std::shared_ptr<CallSignature>& callSignature,
-        std::shared_ptr<Block>& body, bool isErrorNode = false):
+        std::shared_ptr<AstNode>& callSignature,
+        std::shared_ptr<AstNode>& body, bool isErrorNode = false):
         Decl(beginPos, endPos,name, isErrorNode),
         callSignature(callSignature), body(body){
 
@@ -297,8 +297,8 @@ public:
  */
 class ReturnStatement: public Statement{
 public:
-    std::shared_ptr<Expression> exp;
-    ReturnStatement(Position beginPos, Position endPos, std::shared_ptr<Expression>& exp,bool isErrorNode = false):
+    std::shared_ptr<AstNode> exp;
+    ReturnStatement(Position beginPos, Position endPos, std::shared_ptr<AstNode>& exp,bool isErrorNode = false):
         Statement(beginPos, endPos, isErrorNode), exp(exp){
     }
     std::any accept(AstVisitor& visitor, std::string additional) override {
@@ -313,7 +313,7 @@ public:
     std::shared_ptr<AstNode> exp2; //右边的表达式
     Binary(Op op, std::shared_ptr<AstNode> exp1, std::shared_ptr<AstNode> exp2,
         bool isErrorNode = false): Expression(beginPos, endPos, isErrorNode),
-        exp1(exp1), exp2(exp2) {
+        op(op), exp1(exp1), exp2(exp2) {
     }
     std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitBinary(*this, additional);

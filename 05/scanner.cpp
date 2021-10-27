@@ -82,7 +82,7 @@ std::string toString(Op op) {
         return it->second;
     }
 
-    return "Unknow Op";
+    return "Unknow Op!";
 }
 
 std::unordered_map<std::string, KeywordKind> Scanner::KeywordMap {
