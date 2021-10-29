@@ -2,6 +2,8 @@
 #define __COMMON_H_
 
 #include <string>
+#include <type_traits>
+#include <any>
 
 enum class Color {
     Reset,
@@ -11,6 +13,11 @@ enum class Color {
     Blue,
 
 };
+
+template<typename T>
+bool isType(const std::any& a) {
+    return typeid(T) == a.type();
+}
 
 void Print(const std::string& str, Color color = Color::Red);
 
