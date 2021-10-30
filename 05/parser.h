@@ -40,23 +40,94 @@ public:
     }
 
     std::shared_ptr<AstNode> parseProg() {
-        return nullptr;
+        auto beginPos = this->scanner.peek().pos;
+        auto stmts  = this->parseStatementList();
+
+        return std::make_shared<Prog>(beginPos, this->scanner.getLastPos(), stmts);
     }
 
     std::vector<std::shared_ptr<AstNode>> parseStatementList() {
-        return {};
+        std::vector<std::shared_ptr<AstNode>> stmts;
+        auto t = this->scanner.peek();
+        //statementList的Follow集合里有EOF和'}'这两个元素，分别用于prog和Block等场景。
+        while(t.kind != TokenKind::Eof && !(isType<Seperator>(t.code) &&
+              std::any_cast<Seperator>(t.code) == Seperator::CloseBrace)){   //'}'
+            auto stmt = this->parseStatement();
+            stmts.push_back(stmt);
+            t = this->scanner.peek();
+        }
+        return stmts;
     }
 
     std::shared_ptr<AstNode> parseStatement() {
-        return nullptr;
+        auto t = this->scanner.peek();
+        auto code = t.code;
+        //根据'function'关键字，去解析函数声明
+        if (isType<KeywordKind>(code) && std::any_cast<KeywordKind>(code) == KeywordKind::Function){
+            return this->parseFunctionDecl();
+        }
+        else if (isType<KeywordKind>(code) && std::any_cast<KeywordKind>(code) == KeywordKind::Let){
+            return this->parseVariableStatement();
+        }
+        //根据'return'关键字，解析return语句
+        else if (isType<KeywordKind>(code) && std::any_cast<KeywordKind>(code) == KeywordKind::Return){
+            return this->parseReturnStatement();
+        }
+        else if (isType<KeywordKind>(code) && std::any_cast<KeywordKind>(code) == KeywordKind::If){
+            return this->parseIfStatement();
+        }
+        else if (isType<KeywordKind>(code) && std::any_cast<KeywordKind>(code) == KeywordKind::For){
+            return this->parseForStatement();
+        }
+        else if (isType<Seperator>(code) && std::any_cast<Seperator>(code) == Seperator::OpenBrace){  //'{'
+            return this->parseBlock();
+        }
+        else if (t.kind == TokenKind::Identifier ||
+                 t.kind == TokenKind::DecimalLiteral ||
+                 t.kind == TokenKind::IntegerLiteral ||
+                 t.kind == TokenKind::StringLiteral ||
+                 (isType<Seperator>(code) && std::any_cast<Seperator>(code) == Seperator::OpenParen)){  //'('
+            return this->parseExpressionStatement();
+        }
+        else{
+            this->addError("Can not recognize a statement starting with: " + this->scanner.peek().text, this->scanner.getLastPos());
+            auto beginPos = this->scanner.getNextPos();
+            this->skip();
+            return std::make_shared<ErrorStmt>(beginPos,this->scanner.getLastPos());
+        }
     }
 
     std::shared_ptr<AstNode> parseReturnStatement() {
         return nullptr;
     }
 
-    std::shared_ptr<AstNode> parseVariableStatement() {
+    std::shared_ptr<AstNode> parseIfStatement() {
         return nullptr;
+    }
+
+    std::shared_ptr<AstNode> parseForStatement() {
+        return nullptr;
+    }
+
+    std::shared_ptr<AstNode> parseVariableStatement() {
+        auto beginPos = this->scanner.getNextPos();
+        auto isErrorNode = false;
+        //跳过'let'
+        this->scanner.next();
+
+        std::shared_ptr<AstNode> variableDecl = this->parseVariableDecl();
+
+        //分号，结束变量声明
+        auto t = this->scanner.peek();
+        if (std::any_cast<Seperator>(t.code) == Seperator::SemiColon){   //';'
+            this->scanner.next();
+        }
+        else{
+            this->skip();
+            isErrorNode = true;
+        }
+
+        return std::make_shared<VariableStatement>(beginPos,this->scanner.getLastPos(), variableDecl,isErrorNode);
     }
 
     std::shared_ptr<AstNode> parseVariableDecl() {
@@ -132,7 +203,7 @@ public:
         //先解析一个优先级更高的表达式
         std::shared_ptr<AstNode> exp1 = this->parseBinary(assignPrec);
         auto t = this->scanner.peek();
-        auto tprec = this->getPrec(std::any_cast<Op>(t.code));
+        auto tprec = isType<Op>(t.code) ? this->getPrec(std::any_cast<Op>(t.code)) : -1;
         //存放赋值运算符两边的表达式
         std::vector<std::shared_ptr<AstNode>> expStack;
         expStack.push_back(exp1);
@@ -147,7 +218,7 @@ public:
             exp1 = this->parseBinary(assignPrec);
             expStack.push_back(exp1);
             t = this->scanner.peek();
-            tprec = this->getPrec(std::any_cast<Op>(t.code));
+            tprec = isType<Op>(t.code) ? this->getPrec(std::any_cast<Op>(t.code)) : -1;
         }
 
         //组装成右结合的AST
@@ -161,11 +232,113 @@ public:
     }
 
     std::shared_ptr<AstNode> parseBinary(int32_t prec) {
-        return nullptr;
+        // dbg("parseBinary : " + prec);
+        std::shared_ptr<AstNode> exp1 = this->parseUnary();
+        auto t = this->scanner.peek();
+
+        int32_t tprec = isType<Op>(t.code) ? this->getPrec(std::any_cast<Op>(t.code)) : -1;
+
+        //下面这个循环的意思是：只要右边出现的新运算符的优先级更高，
+        //那么就把右边出现的作为右子节点。
+        /**
+         * 对于2+3*5
+         * 第一次循环，遇到+号，优先级大于零，所以做一次递归的parseBinary
+         * 在递归的binary中，遇到乘号，优先级大于+号，所以形成3*5返回，又变成上一级的右子节点。
+         *
+         * 反过来，如果是3*5+2
+         * 第一次循环还是一样，遇到*号，做一次递归的parseBinary
+         * 在递归中，新的运算符的优先级要小，所以只返回一个5，跟前一个节点形成3*5,成为新的左子节点。
+         * 接着做第二次循环，遇到+号，返回5，并作为右子节点，跟3*5一起组成一个新的binary返回。
+         */
+
+        while (t.kind == TokenKind::Operator &&  tprec > prec){
+            this->scanner.next();  //跳过运算符
+            std::shared_ptr<AstNode> exp2 = this->parseBinary(tprec);
+            std::shared_ptr<AstNode> exp = std::make_shared<Binary>(std::any_cast<Op>(t.code), exp1, exp2);
+            exp1 = exp;
+            t = this->scanner.peek();
+            tprec = isType<Op>(t.code) ? this->getPrec(std::any_cast<Op>(t.code)) : -1;
+        }
+        return exp1;
+    }
+
+    std::shared_ptr<AstNode> parseUnary() {
+        auto beginPos = this->scanner.getNextPos();
+        auto t = this->scanner.peek();
+
+        //前缀的一元表达式
+        if(t.kind == TokenKind::Operator){
+            this->scanner.next();//跳过运算符
+            auto exp = this->parseUnary();
+            return std::make_shared<Unary>(beginPos, this->scanner.getLastPos(), std::any_cast<Op>(t.code), exp, true);
+        }
+        //后缀只能是++或--
+        else{
+            //首先解析一个primary
+            auto exp = this->parsePrimary();
+            auto t1 = this->scanner.peek();
+            if (t1.kind == TokenKind::Operator &&
+                (std::any_cast<Op>(t.code) == Op::Inc || std::any_cast<Op>(t.code) == Op::Dec)){
+                this->scanner.next(); //跳过运算符
+                return std::make_shared<Unary>(beginPos, this->scanner.getLastPos(), std::any_cast<Op>(t.code), exp, false);
+            }
+            else{
+                return exp;
+            }
+        }
     }
 
     std::shared_ptr<AstNode> parsePrimary() {
-        return nullptr;
+        auto beginPos = this->scanner.getNextPos();
+        auto t = this->scanner.peek();
+        // console.log("parsePrimary: " + t.text);
+
+        //知识点：以Identifier开头，可能是函数调用，也可能是一个变量，所以要再多向后看一个Token，
+        //这相当于在局部使用了LL(2)算法。
+        if (t.kind == TokenKind::Identifier){
+            auto code2 = this->scanner.peek2().code;
+            if (isType<Seperator>(code2)&&  std::any_cast<Seperator>(code2) == Seperator::OpenParen){  //'('
+                return this->parseFunctionCall();
+            }
+            else{
+                this->scanner.next();
+                return std::make_shared<Variable>(beginPos, this->scanner.getLastPos(), t.text);
+            }
+        }
+        else if (t.kind == TokenKind::IntegerLiteral){
+            this->scanner.next();
+            return std::make_shared<IntegerLiteral>(beginPos, std::stoi(t.text));
+        }
+        else if (t.kind == TokenKind::DecimalLiteral){
+            this->scanner.next();
+            //return std::make_shared<DecimalLiteral>(beginPos,parseFloat(t.text));
+            dbg("IntegerLiteral is not support!");
+            return nullptr;
+        }
+        else if (t.kind == TokenKind::StringLiteral){
+            this->scanner.next();
+            //return std::make_shared<StringLiteral>(beginPos,t.text);
+            dbg("StringLiteral is not support!");
+            return nullptr;
+        }
+        else if (isType<Seperator>(t.code) && std::any_cast<Seperator>(t.code) == Seperator::OpenParen){  //'('
+            this->scanner.next();
+            auto exp = this->parseExpression();
+            auto t1 = this->scanner.peek();
+            if (isType<Seperator>(t1.code) && std::any_cast<Seperator>(t1.code) == Seperator::CloseParen){  //')'
+                this->scanner.next();
+            }
+            else{
+                this->addError("Expecting a ')' at the end of a primary expresson, while we got a " + t.text, this->scanner.getLastPos());
+                this->skip();
+            }
+            return exp;
+        }
+        else{
+            //理论上永远不会到达这里
+            this->addError("Can not recognize a primary expression starting with: " + t.text, this->scanner.getLastPos());
+            return std::make_shared<ErrorExp>(beginPos, this->scanner.getLastPos());
+        }
     }
 
     std::shared_ptr<AstNode> parseFunctionCall() {

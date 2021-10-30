@@ -19,6 +19,6 @@ bool isType(const std::any& a) {
     return typeid(T) == a.type();
 }
 
-void Print(const std::string& str, Color color = Color::Red);
+std::string Print(const std::string& str, Color color = Color::Red);
 
 #endif

@@ -16,6 +16,7 @@ SET(SRC_FILE  "types.cpp"
               "common.cpp"
               "ast.cpp"
               "scanner.cpp"
+              "parser.cpp"
                        )
 add_executable(${PROJECT_NAME} ${SRC_FILE} ${MAIN_FILE})
 include_directories("third_party/dbg-macro/")

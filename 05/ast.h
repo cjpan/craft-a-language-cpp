@@ -14,6 +14,7 @@
 #include <memory>
 #include <any>
 #include <stdint.h>
+#include <sstream>
 
 class AstNode;
 class ErrorStmt;
@@ -349,9 +350,14 @@ public:
 };
 
 class AstDumper: public AstVisitor{
+    std::stringstream ss;
 public:
+    std::string toString() {
+        return ss.str();
+    }
+
     std::any visitParameterList(ParameterList& paramList, std::string prefix) override {
-        Print(prefix+"ParamList:" + (paramList.isErrorNode? " **E** " : "") + (paramList.params.size()== 0 ? "none":""));
+        ss << Print(prefix+"ParamList:" + (paramList.isErrorNode? " **E** " : "") + (paramList.params.size()== 0 ? "none":""));
         for(auto x: paramList.params){
             this->visit(*x, prefix+"    ");
         }
@@ -359,11 +365,11 @@ public:
     }
 
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
-        Print(prefix+"VariableDecl "+variableDecl.name +
+        ss << Print(prefix+"VariableDecl "+variableDecl.name +
             (variableDecl.theType == nullptr? "" : "("+variableDecl.theType->name+")") +
             (variableDecl.isErrorNode? " **E** " : ""));
         if (variableDecl.init == nullptr){
-            Print(prefix+"no initialization.");
+            ss << Print(prefix+"no initialization.");
         }
         else{
             this->visit(*variableDecl.init, prefix+"    ");
@@ -372,17 +378,17 @@ public:
     }
 
     std::any visitVariableStatement(VariableStatement& variableStmt, std::string prefix) override {
-        Print(prefix+"VariableStatement " + (variableStmt.isErrorNode? " **E** " : ""));
+        ss << Print(prefix+"VariableStatement" + (variableStmt.isErrorNode? " **E** " : ""));
         return this->visit(*variableStmt.variableDecl, prefix+"    ");
     }
 
     std::any visitExpressionStatement(ExpressionStatement& stmt, std::string prefix) override {
-        Print(prefix+"ExpressionStatement" + (stmt.isErrorNode? " **E** " : ""));
+        ss << Print(prefix+"ExpressionStatement" + (stmt.isErrorNode? " **E** " : ""));
         return this->visit(*stmt.exp, prefix+"    ");
     }
 
     std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
-        Print(prefix+"FunctionCall "+ (functionCall.theType == nullptr? "" : "("+functionCall.theType->name+")") +
+        ss << Print(prefix+"FunctionCall "+ (functionCall.theType == nullptr? "" : "("+functionCall.theType->name+")") +
             (functionCall.isErrorNode? " **E** " : "")+functionCall.name +
             (built_ins.count(functionCall.name) > 0 ? ", built-in" :
              functionCall.sym!=nullptr ? ", resolved" : ", not resolved"));
@@ -393,7 +399,7 @@ public:
     }
 
     std::any visitProg(Prog& prog, std::string prefix) override {
-        Print(prefix + "Prog"+ (prog.isErrorNode? " **E** " : ""));
+        ss << Print(prefix + "Prog"+ (prog.isErrorNode? " **E** " : ""));
         for(auto x: prog.stmts){
             this->visit(*x, prefix+"    ");
         }
@@ -402,7 +408,7 @@ public:
 
     std::any visitBlock(Block& block, std::string prefix) override {
         if(block.isErrorNode){
-            Print(prefix + "Block" + (block.isErrorNode? " **E** " : ""));
+            ss << Print(prefix + "Block" + (block.isErrorNode? " **E** " : ""));
         }
         for(auto x: block.stmts){
             this->visit(*x, prefix+"    ");
@@ -412,30 +418,30 @@ public:
 
 
     std::any visitVariable(Variable& variable, std::string prefix) override {
-        Print(prefix+"Variable: "+ (variable.isErrorNode? " **E** " : "")+
+        ss << Print(prefix+"Variable: "+ (variable.isErrorNode? " **E** " : "")+
             variable.name + (variable.theType == nullptr? "" : "("+variable.theType->name+")") +
             (variable.isLeftValue ? ", LeftValue" : "") +
             (variable.sym != nullptr ? ", resolved" : ", not resolved"));
             return std::any();
     }
     std::any visitIntegerLiteral(IntegerLiteral& exp, std::string prefix) override {
-        Print(prefix+ std::to_string(exp.value) +
+        ss << Print(prefix+ std::to_string(exp.value) +
             (exp.theType == nullptr? "" : "("+exp.theType->name+")") +
             (exp.isErrorNode? " **E** " : ""));
         return std::any();
     }
     std::any visitErrorStmt(ErrorStmt& node, std::string prefix) override {
-        Print(prefix+"Error Statement **E**");
+        ss << Print(prefix+"Error Statement **E**");
         return std::any();
     }
 
     std::any visitErrorExp(ErrorExp& node, std::string prefix) override {
-        Print(prefix+"Error Expression **E**");
+        ss << Print(prefix+"Error Expression **E**");
         return std::any();
     }
 
     std::any visitCallSignature(CallSignature& callSinature, std::string prefix) override {
-        Print(prefix+ (callSinature.isErrorNode? " **E** " : "")+"Return type: " + callSinature.theType->name);
+        ss << Print(prefix+ (callSinature.isErrorNode? " **E** " : "")+"Return type: " + callSinature.theType->name);
         if (callSinature.paramList!=nullptr){
             this->visit(*callSinature.paramList, prefix + "    ");
         }
@@ -444,7 +450,7 @@ public:
     }
 
     std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
-        Print(prefix+"FunctionDecl "+ functionDecl.name + (functionDecl.isErrorNode? " **E** " : ""));
+        ss << Print(prefix+"FunctionDecl "+ functionDecl.name + (functionDecl.isErrorNode? " **E** " : ""));
         this->visit(*functionDecl.callSignature, prefix+"    ");
         this->visit(*functionDecl.body, prefix+"    ");
 
@@ -452,7 +458,7 @@ public:
     }
 
     std::any visitReturnStatement(ReturnStatement& stmt, std::string prefix) override {
-        Print(prefix+"ReturnStatement" + (stmt.isErrorNode? " **E** " : ""));
+        ss << Print(prefix+"ReturnStatement" + (stmt.isErrorNode? " **E** " : ""));
         if (stmt.exp != nullptr){
             return this->visit(*stmt.exp, prefix+"    ");
         }
@@ -461,7 +467,7 @@ public:
     }
 
     std::any visitBinary(Binary& exp, std::string prefix) override {
-        Print(prefix+"Binary:"+ toString(exp.op)+ (exp.theType == nullptr? "" : "("+exp.theType->name+")") + (exp.isErrorNode? " **E** " : ""));
+        ss << Print(prefix+"Binary:"+ ::toString(exp.op)+ (exp.theType == nullptr? "" : "("+exp.theType->name+")") + (exp.isErrorNode? " **E** " : ""));
 
         this->visit(*exp.exp1, prefix+"    ");
         this->visit(*exp.exp2, prefix+"    ");
@@ -469,7 +475,7 @@ public:
     }
 
     std::any visitUnary(Unary& exp, std::string prefix) override {
-        Print(prefix + (exp.isPrefix ? "Prefix ": "PostFix ") +"Unary:"+toString(exp.op)+ (exp.theType == nullptr? "" : "("+exp.theType->name+")") + (exp.isErrorNode? " **E** " : ""));
+        ss << Print(prefix + (exp.isPrefix ? "Prefix ": "PostFix ") +"Unary:"+::toString(exp.op)+ (exp.theType == nullptr? "" : "("+exp.theType->name+")") + (exp.isErrorNode? " **E** " : ""));
         this->visit(*exp.exp, prefix+"    ");
         return std::any();
     }
