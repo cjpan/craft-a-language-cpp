@@ -71,3 +71,9 @@ std::any AstVisitor::visitBinary(Binary& exp, std::string additional) {
     this->visit(*exp.exp2, additional);
     return std::any();
 }
+
+std::any AstVisitor::visitUnary(Unary& exp, std::string additional) {
+    this->visit(*exp.exp, additional);
+    return std::any();
+}
+

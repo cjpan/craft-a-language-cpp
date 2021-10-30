@@ -17,6 +17,7 @@
 
 class AstNode;
 class ErrorStmt;
+class ErrorExp;
 class Variable;
 class IntegerLiteral;
 class ParameterList;
@@ -30,6 +31,7 @@ class CallSignature;
 class FunctionDecl;
 class ReturnStatement;
 class Binary;
+class Unary;
 
 class AstVisitor{
 public:
@@ -58,6 +60,8 @@ public:
 
     virtual std::any visitBinary(Binary& exp, std::string additional = "");
 
+    virtual std::any visitUnary(Unary& exp, std::string additional = "");
+
     virtual std::any visitVariable(Variable& node, std::string additional = "") {
         return std::any();
     }
@@ -65,6 +69,9 @@ public:
         return std::any();
     }
     virtual std::any visitErrorStmt(ErrorStmt& node, std::string additional = "") {
+        return std::any();
+    }
+    virtual std::any visitErrorExp(ErrorExp& node, std::string additional = "") {
         return std::any();
     }
 };
@@ -102,10 +109,9 @@ public:
 
 class ErrorStmt: public Statement{
 public:
-    ErrorStmt(Position beginPos, Position endPos):
-        Statement(beginPos, endPos, true){
+    ErrorStmt(Position beginPos, Position endPos): Statement(beginPos, endPos, true) {
     }
-    std::any accept(AstVisitor& visitor, std::string additional) {
+    std::any accept(AstVisitor& visitor, std::string additional) override {
         return visitor.visitErrorStmt(*this, additional);
     }
 };
@@ -125,6 +131,15 @@ public:
     //这个类型一般是theType的子类型。比如，theType是any，但inferredType是number.
 
     Type* inferredType {nullptr};
+};
+
+class ErrorExp: public Expression{
+public:
+    ErrorExp(Position beginPos, Position endPos): Expression(beginPos, endPos, true) {
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitErrorExp(*this, additional);
+    }
 };
 
 /**
@@ -320,6 +335,19 @@ public:
     }
 };
 
+class Unary: public Expression{
+public:
+    Op op;      //运算符
+    std::shared_ptr<AstNode> exp;  //表达式
+    bool isPrefix;//前缀还是后缀
+    Unary(Position beginPos, Position endPos, Op op, std::shared_ptr<AstNode> exp, bool isPrefix, bool isErrorNode = false):
+        Expression(beginPos, endPos, isErrorNode), op(op), exp(exp), isPrefix(isPrefix) {
+    }
+    std::any accept(AstVisitor& visitor, std::string additional) override {
+        return visitor.visitUnary(*this, additional);
+    }
+};
+
 class AstDumper: public AstVisitor{
 public:
     std::any visitParameterList(ParameterList& paramList, std::string prefix) override {
@@ -401,6 +429,11 @@ public:
         return std::any();
     }
 
+    std::any visitErrorExp(ErrorExp& node, std::string prefix) override {
+        Print(prefix+"Error Expression **E**");
+        return std::any();
+    }
+
     std::any visitCallSignature(CallSignature& callSinature, std::string prefix) override {
         Print(prefix+ (callSinature.isErrorNode? " **E** " : "")+"Return type: " + callSinature.theType->name);
         if (callSinature.paramList!=nullptr){
@@ -427,11 +460,17 @@ public:
         return std::any();
     }
 
-    std::any visitBinary(Binary& exp, std::string prefix) {
+    std::any visitBinary(Binary& exp, std::string prefix) override {
         Print(prefix+"Binary:"+ toString(exp.op)+ (exp.theType == nullptr? "" : "("+exp.theType->name+")") + (exp.isErrorNode? " **E** " : ""));
 
         this->visit(*exp.exp1, prefix+"    ");
         this->visit(*exp.exp2, prefix+"    ");
+        return std::any();
+    }
+
+    std::any visitUnary(Unary& exp, std::string prefix) override {
+        Print(prefix + (exp.isPrefix ? "Prefix ": "PostFix ") +"Unary:"+toString(exp.op)+ (exp.theType == nullptr? "" : "("+exp.theType->name+")") + (exp.isErrorNode? " **E** " : ""));
+        this->visit(*exp.exp, prefix+"    ");
         return std::any();
     }
 };
