@@ -195,7 +195,20 @@ public:
     }
 
     std::shared_ptr<AstNode> parseExpressionStatement() {
-        return nullptr;
+        auto exp = this->parseExpression();
+        auto t = this->scanner.peek();
+        auto stmt = std::make_shared<ExpressionStatement>(this->scanner.getLastPos(),exp);
+        if (isType<Seperator>(t.code) &&
+            std::any_cast<Seperator>(t.code) == Seperator::SemiColon){  //';'
+            this->scanner.next();
+        }
+        else{
+            this->addError("Expecting a semicolon at the end of an expresson statement, while we got a " + t.text, this->scanner.getLastPos());
+            this->skip();
+            stmt->endPos = this->scanner.getLastPos();
+            stmt->isErrorNode = true;
+        }
+        return stmt;
     }
 
     std::shared_ptr<AstNode> parseAssignment() {
@@ -342,7 +355,43 @@ public:
     }
 
     std::shared_ptr<AstNode> parseFunctionCall() {
-        return nullptr;
+        auto beginPos = this->scanner.getNextPos();
+        std::vector<std::shared_ptr<AstNode>> params;
+        auto name = this->scanner.next().text;
+
+        //跳过'('
+        this->scanner.next();
+
+        //循环，读出所有参数
+        auto t1 = this->scanner.peek();
+        while(!(isType<Seperator>(t1.code) && std::any_cast<Seperator>(t1.code) == Seperator::CloseParen) &&
+                t1.kind != TokenKind::Eof){
+            auto exp = this->parseExpression();
+            params.push_back(exp);
+
+            if (exp->isErrorNode){
+                this->addError("Error parsing parameter for function call "+name, this->scanner.getLastPos());
+            }
+
+            t1 = this->scanner.peek();
+            if (!(isType<Seperator>(t1.code) && std::any_cast<Seperator>(t1.code) == Seperator::CloseParen)){ //')'
+                if (isType<Op>(t1.code) && std::any_cast<Op>(t1.code) == Op::Comma){ //','
+                    t1 = this->scanner.next();
+                }
+                else{
+                    this->addError("Expecting a comma at the end of a parameter, while we got a " + t1.text, this->scanner.getLastPos());
+                    this->skip();
+                    return std::make_shared<FunctionCall>(beginPos, this->scanner.getLastPos(), name, params,true);
+                }
+            }
+        }
+
+        if (isType<Seperator>(t1.code) && std::any_cast<Seperator>(t1.code) == Seperator::CloseParen){
+            //消化掉')'
+            this->scanner.next();
+        }
+
+        return std::make_shared<FunctionCall>(beginPos, this->scanner.getLastPos(), name, params);
     }
 
 
