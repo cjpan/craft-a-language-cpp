@@ -97,18 +97,6 @@ public:
         }
     }
 
-    std::shared_ptr<AstNode> parseReturnStatement() {
-        return nullptr;
-    }
-
-    std::shared_ptr<AstNode> parseIfStatement() {
-        return nullptr;
-    }
-
-    std::shared_ptr<AstNode> parseForStatement() {
-        return nullptr;
-    }
-
     std::shared_ptr<AstNode> parseVariableStatement() {
         auto beginPos = this->scanner.getNextPos();
         auto isErrorNode = false;
@@ -187,11 +175,37 @@ public:
     }
 
     std::shared_ptr<AstNode> parseBlock() {
-        return nullptr;
+        auto beginPos = this->scanner.getNextPos();
+        auto t = this->scanner.peek();
+        //跳过'{'
+        this->scanner.next();
+        auto stmts = this->parseStatementList();
+        t = this->scanner.peek();
+        if (isType<Seperator>(t.code) && std::any_cast<Seperator>(t.code) == Seperator::CloseBrace){  //'}'
+            this->scanner.next();
+            return std::make_shared<Block>(beginPos, this->scanner.getLastPos(), stmts);
+        }
+        else{
+            this->addError("Expecting '}' while parsing a block, but we got a " + t.text, this->scanner.getLastPos());
+            this->skip();
+            return std::make_shared<Block>(beginPos, this->scanner.getLastPos(), stmts, true);
+        }
     }
 
     std::shared_ptr<AstNode> parseExpression() {
         return this->parseAssignment();
+    }
+
+    std::shared_ptr<AstNode> parseReturnStatement() {
+        return nullptr;
+    }
+
+    std::shared_ptr<AstNode> parseIfStatement() {
+        return nullptr;
+    }
+
+    std::shared_ptr<AstNode> parseForStatement() {
+        return nullptr;
     }
 
     std::shared_ptr<AstNode> parseExpressionStatement() {
@@ -291,7 +305,7 @@ public:
             auto exp = this->parsePrimary();
             auto t1 = this->scanner.peek();
             if (t1.kind == TokenKind::Operator &&
-                (std::any_cast<Op>(t.code) == Op::Inc || std::any_cast<Op>(t.code) == Op::Dec)){
+                (isType<Op>(t.code) && (std::any_cast<Op>(t.code) == Op::Inc || std::any_cast<Op>(t.code) == Op::Dec))){
                 this->scanner.next(); //跳过运算符
                 return std::make_shared<Unary>(beginPos, this->scanner.getLastPos(), std::any_cast<Op>(t.code), exp, false);
             }
@@ -396,6 +410,22 @@ public:
 
 
     Type& parseType(const std::string& typeName){
+        static std::map<std::string, Type&> str2Type = {
+            {"any", SysTypes::Any},
+            {"number", SysTypes::Number},
+            {"boolean", SysTypes::Boolean},
+            {"string", SysTypes::String},
+            {"undefined", SysTypes::Undefined},
+            {"null", SysTypes::Null},
+            {"void", SysTypes::Undefined},
+        };
+
+        auto it = str2Type.find(typeName);
+        if (it != str2Type.end()) {
+            return it->second;
+        }
+
+        this->addError("Unrecognized type: "+typeName, this->scanner.getLastPos());
         return SysTypes::Any;
     }
 

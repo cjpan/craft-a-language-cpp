@@ -50,3 +50,34 @@ R"(Prog
     auto str = dumper.toString();
     EXPECT_STREQ(expect.c_str(), str.c_str());
 }
+
+TEST(PARSER, block)
+{
+    std::string expect =
+R"(Prog
+        VariableStatement
+            VariableDecl area(number)
+                Binary:Multiply
+                    4(integer)
+                    Variable: r, not resolved
+)";
+
+    std::string program =
+R"(
+{
+    let area : number = 4*r;
+}
+)";
+
+    CharStream charStream(program);
+    Scanner scanner(charStream);
+
+    auto parser = Parser(scanner);
+    auto ast = parser.parseProg();
+
+    auto dumper = AstDumper();
+    dumper.visit(*ast, "");
+
+    auto str = dumper.toString();
+    EXPECT_STREQ(expect.c_str(), str.c_str());
+}
