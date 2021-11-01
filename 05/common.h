@@ -19,6 +19,11 @@ bool isType(const std::any& a) {
     return typeid(T) == a.type();
 }
 
+template<typename T>
+bool CheckType(const std::any& val, T t) {
+    return isType<T>(val) && std::any_cast<T>(val) == t;
+}
+
 std::string Print(const std::string& str, Color color = Color::Red);
 
 #endif

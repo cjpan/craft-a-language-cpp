@@ -130,7 +130,7 @@ public:
 
             auto t1 = this->scanner.peek();
             //可选的类型注解
-            if (isType<Seperator>(t1.code) && std::any_cast<Seperator>(t1.code) == Seperator::Colon){  //':'
+            if (CheckType<Seperator>(t1.code, Seperator::Colon)){  //':'
                 this->scanner.next();
                 t1 = this->scanner.peek();
                 if (t1.kind == TokenKind::Identifier){
@@ -147,7 +147,7 @@ public:
 
             //可选的初始化部分
             t1 = this->scanner.peek();
-            if (isType<Op>(t1.code) && std::any_cast<Op>(t1.code) == Op::Assign){  //'='
+            if (CheckType<Op>(t1.code, Op::Assign)){  //'='
                 this->scanner.next();
                 init = this->parseExpression();
             }
@@ -163,15 +163,177 @@ public:
     }
 
     std::shared_ptr<AstNode> parseFunctionDecl() {
-        return nullptr;
+        auto beginPos = this->scanner.getNextPos();
+        auto isErrorNode = false;
+
+        //跳过关键字'function'
+        this->scanner.next();
+
+        auto t = this->scanner.next();
+        if (t.kind != TokenKind::Identifier){
+            this->addError("Expecting a function name, while we got a " + t.text, this->scanner.getLastPos());
+            this->skip();
+            isErrorNode = true;
+        }
+
+        //解析callSignature
+        std::shared_ptr<AstNode> callSignature;
+        auto t1 = this->scanner.peek();
+        if (CheckType<Seperator>(t1.code, Seperator::OpenParen)){  //'('
+            callSignature = this->parseCallSignature();
+        }
+        else{
+            this->addError("Expecting '(' in FunctionDecl, while we got a " + t.text, this->scanner.getLastPos());
+            this->skip();
+            std::shared_ptr<AstNode> paramList;
+            callSignature = std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList,&SysTypes::Any,true);
+        }
+
+        //解析block
+        std::shared_ptr<AstNode> functionBody;
+        t1 = this->scanner.peek();
+        if (CheckType<Seperator>(t1.code, Seperator::OpenBrace)){   //'{'
+            functionBody = this->parseBlock();
+        }
+        else{
+            this->addError("Expecting '{' in FunctionDecl, while we got a " + t1.text, this->scanner.getLastPos());
+            this->skip();
+            std::vector<std::shared_ptr<AstNode>> stms;
+            functionBody = std::make_shared<Block>(beginPos,this->scanner.getLastPos(),stms,true);
+        }
+
+        return std::make_shared<FunctionDecl>(beginPos,t.text, callSignature, functionBody, isErrorNode);
     }
 
     std::shared_ptr<AstNode> parseCallSignature() {
-        return nullptr;
+        auto beginPos = this->scanner.getNextPos();
+        //跳过'('
+        auto t = this->scanner.next();
+
+        std::shared_ptr<AstNode> paramList;
+        if (!CheckType<Seperator>(this->scanner.peek().code, Seperator::CloseParen)){  //')'
+            paramList = this->parseParameterList();
+        }
+
+        //看看后面是不是')'
+        t = this->scanner.peek();
+        if (CheckType<Seperator>(t.code, Seperator::CloseParen)){  //')'
+            //跳过')'
+            this->scanner.next();
+
+            //解析typeAnnotation
+            std::string theType = "any";
+            if (CheckType<Seperator>(this->scanner.peek().code, Seperator::Colon)){  //':'
+                theType = this->parseTypeAnnotation();
+            }
+            return std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList, &this->parseType(theType));
+        }
+        else{
+            this->addError("Expecting a ')' after for a call signature", this->scanner.getLastPos());
+            return std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList, &SysTypes::Any, true);
+        }
     }
 
+    std::string parseTypeAnnotation() {
+        std::string theType = "any";
+
+        //跳过:
+        this->scanner.next();
+
+        auto t = this->scanner.peek();
+        if (t.kind == TokenKind::Identifier){
+            this->scanner.next();
+            theType = t.text;
+        }
+        else{
+            this->addError("Expecting a type name in type annotation", this->scanner.getLastPos());
+        }
+
+        return theType;
+    }
+
+
     std::shared_ptr<AstNode> parseParameterList() {
-        return nullptr;
+        std::vector<std::shared_ptr<AstNode>> params;
+        auto beginPos = this->scanner.getNextPos();
+        auto isErrorNode = false;
+        auto t = this->scanner.peek();
+        while ((!(isType<Seperator>(t.code) && std::any_cast<Seperator>(t.code) == Seperator::CloseParen)) &&
+                (t.kind != TokenKind::Eof)){  //')'
+            if (t.kind == TokenKind::Identifier){
+                this->scanner.next();
+                auto t1 = this->scanner.peek();
+                std::string theType = "any";
+                if (isType<Seperator>(t1.code) && std::any_cast<Seperator>(t1.code)== Seperator::Colon){  //':'
+                    theType = this->parseTypeAnnotation();
+                }
+                std::shared_ptr<AstNode> init;
+                params.push_back(std::make_shared<VariableDecl>(beginPos, this->scanner.getLastPos(), t.text, &this->parseType(theType), init));
+
+                //处理','
+                t = this->scanner.peek();
+                if (!(isType<Seperator>(t.code) && std::any_cast<Seperator>(t.code) == Seperator::CloseParen)){  //')'
+                    if (isType<Op>(t.code) && std::any_cast<Op>(t.code) == Op::Comma){  //','
+                        this->scanner.next(); //跳过','
+                        // console.log("meet a comma in parseParameterList");
+                        t = this->scanner.peek();
+                    }
+                    else{
+                        this->addError("Expecting a ',' or '）' after a parameter", this->scanner.getLastPos());
+                        this->skip();
+                        isErrorNode = true;
+                        auto t2 = this->scanner.peek();
+                        if (isType<Op>(t2.code) && std::any_cast<Op>(t2.code) == Op::Comma){   //','
+                            this->scanner.next();  //跳过','
+                            t = this->scanner.peek();
+                        }
+                        else{
+                            break;
+                        }
+                    }
+                }
+            }
+            else{
+                this->addError("Expecting an identifier as name of a Parameter", this->scanner.getLastPos());
+                this->skip();
+                isErrorNode = true;
+                if (isType<Op>(t.code) && std::any_cast<Op>(t.code) == Op::Comma){  //','
+                    this->scanner.next();  //跳过','
+                    t = this->scanner.peek();
+                }
+                else{
+                    break;
+                }
+            }
+        }
+
+        return std::make_shared<ParameterList>(beginPos, this->scanner.getLastPos(),params,isErrorNode);
+    }
+
+    std::shared_ptr<AstNode> parseReturnStatement() {
+        auto beginPos = this->scanner.getNextPos();
+        std::shared_ptr<AstNode> exp;
+
+        //跳过'return'
+        this->scanner.next();
+        // console.log(this->scanner.peek().toString());
+
+        //解析后面的表达式
+        auto t = this->scanner.peek();
+        if (!(isType<Seperator>(t.code) && std::any_cast<Seperator>(t.code) == Seperator::SemiColon)){  //';'
+            exp = this->parseExpression();
+        }
+
+        //跳过';'
+        t = this->scanner.peek();
+        if (isType<Seperator>(t.code) && std::any_cast<Seperator>(t.code) == Seperator::SemiColon){  //';'
+            this->scanner.next();
+        }
+        else{
+            this->addError("Expecting ';' after return statement.", this->scanner.getLastPos());
+        }
+
+        return std::make_shared<ReturnStatement>(beginPos, this->scanner.getLastPos(), exp);
     }
 
     std::shared_ptr<AstNode> parseBlock() {
@@ -194,10 +356,6 @@ public:
 
     std::shared_ptr<AstNode> parseExpression() {
         return this->parseAssignment();
-    }
-
-    std::shared_ptr<AstNode> parseReturnStatement() {
-        return nullptr;
     }
 
     std::shared_ptr<AstNode> parseIfStatement() {
