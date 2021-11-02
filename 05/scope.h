@@ -11,9 +11,9 @@ class Scope{
     std::map<std::string, std::shared_ptr<Symbol>> name2sym;
 public:
     //上级作用域
-    Scope* enclosingScope {nullptr}; //顶级作用域的上一级是null
+    std::shared_ptr<Scope> enclosingScope {nullptr}; //顶级作用域的上一级是null
 
-    Scope(Scope* enclosingScope): enclosingScope(enclosingScope){
+    Scope(std::shared_ptr<Scope> enclosingScope): enclosingScope(enclosingScope){
     }
 
     /**

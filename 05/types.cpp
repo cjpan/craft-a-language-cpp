@@ -106,3 +106,5 @@ SimpleType SysTypes::Void{"void"};
 //两个Number的子类型
 SimpleType SysTypes::Integer{"integer", {&SysTypes::Number}};
 SimpleType SysTypes::Decimal{"decimal", {&SysTypes::Number}};
+
+
