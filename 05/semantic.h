@@ -58,14 +58,14 @@ public:
      * @param prog
      */
     std::any visitProg(Prog& prog, std::string prefix) override {
-/*
-        auto sym = std::make_shared<FunctionSymbol>("main", SysTypes::Integer);
+        auto retType = SysTypes::Integer();
+        std::vector<std::shared_ptr<Type>> paramTypes;
+        std::shared_ptr<Type> funcType = std::make_shared<FunctionType>(retType, paramTypes);
+        auto sym = std::make_shared<FunctionSymbol>("main", funcType);
         prog.sym = sym;
         this->functionSym = sym;
 
         return AstVisitor::visitProg(prog);
-*/
-        return std::any();
     }
 
     /**
@@ -73,11 +73,11 @@ public:
      * @param functionDecl
      */
     std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
-/*
+
         auto currentScope = this->scope;
 
         //创建函数的symbol
-        std::vector<Type*> paramTypes;
+        std::vector<std::shared_ptr<Type>> paramTypes;
         auto callSignature = std::dynamic_pointer_cast<CallSignature>(functionDecl.callSignature);
         if (callSignature!= nullptr && callSignature->paramList != nullptr){
             auto paramList = std::dynamic_pointer_cast<ParameterList>(callSignature->paramList);
@@ -93,36 +93,39 @@ public:
             }
         }
 
-        auto sym = std::make_shared<FunctionSymbol>(functionDecl.name, new FunctionType(functionDecl.callSignature.theType,paramTypes));
-        sym.decl = functionDecl;
+        auto retType = callSignature->theType;
+        std::shared_ptr<Type> funcType = std::make_shared<FunctionType>(retType, paramTypes);
+        std::shared_ptr<FunctionSymbol> sym = std::make_shared<FunctionSymbol>(functionDecl.name, funcType);
+        sym->decl = &functionDecl;
         functionDecl.sym = sym;
 
         //把函数加入当前scope
-        if (currentScope.hasSymbol(functionDecl.name)){
+        if (currentScope->hasSymbol(functionDecl.name)){
             this->addError("Dumplicate symbol: "+ functionDecl.name, functionDecl);
         }
         else{
-            currentScope.enter(functionDecl.name, sym);
+            currentScope->enter(functionDecl.name, sym);
         }
 
         //修改当前的函数符号
-        let lastFunctionSym = this->functionSym;
+        auto lastFunctionSym = this->functionSym;
         this->functionSym = sym;
 
+
         //创建新的Scope，用来存放参数
-        let oldScope = currentScope;
-        this->scope = new Scope(oldScope);
+        auto oldScope = currentScope;
+        this->scope = std::make_shared<Scope>(oldScope);
         functionDecl.scope = this->scope;
 
         //遍历子节点
-        super.visitFunctionDecl(functionDecl);
+        AstVisitor::visitFunctionDecl(functionDecl);
 
         //恢复当前函数
         this->functionSym = lastFunctionSym;
 
         //恢复原来的Scope
         this->scope = oldScope;
-*/
+
         return std::any();
     }
 

@@ -61,6 +61,7 @@ public:
     }
 };
 
+class FunctionDecl;
 class FunctionSymbol: public Symbol{
 public:
     //vars:VarSymbol[] = [];
@@ -71,7 +72,7 @@ public:
 
     std::vector<char> byteCode; //存放生成的字节码
 
-    // std::shared_ptr<FunctionDecl> decl; //存放AST，作为代码来运行
+    FunctionDecl* decl; //存放AST，作为代码来运行
 
     FunctionSymbol(const std::string& name, std::shared_ptr<Type>& theType, std::vector<std::shared_ptr<Symbol>> vars = {}):
         Symbol(name, theType, SymKind::Function), vars(vars)
