@@ -3,6 +3,7 @@
 
 #include "dbg.h"
 #include "types.h"
+#include "common.h"
 
 #include <any>
 #include <vector>
@@ -29,32 +30,32 @@ public:
 class Symbol{
 public:
     std::string name;
-    Type& theType {SysTypes::Any};
+    std::shared_ptr<Type> theType;
     SymKind kind;
-    Symbol(const std::string& name, Type& theType, SymKind kind):
+    Symbol(const std::string& name, std::shared_ptr<Type>& theType, SymKind kind):
         name(name), theType(theType), kind(kind){
     }
 
-    /**
-     * visitor模式
-     * @param vistor
-     * @param additional 额外需要传递给visitor的信息。
-     */
+    //
+    // visitor模式
+    // @param vistor
+    // @param additional 额外需要传递给visitor的信息。
+    //
     virtual std::any accept(SymbolVisitor& vistor, std::string additional) = 0;
 
 };
 
 class VarSymbol: public Symbol{
 public:
-    VarSymbol(const std::string& name, Type& theType):
+    VarSymbol(const std::string& name, std::shared_ptr<Type>& theType):
         Symbol(name, theType, SymKind::Variable){
     }
 
-    /**
-     * visitor模式
-     * @param vistor
-     * @param additional 额外需要传递给visitor的信息。
-     */
+    //
+    // visitor模式
+    // @param vistor
+    // @param additional 额外需要传递给visitor的信息。
+    //
     std::any accept(SymbolVisitor& vistor, std::string additional = "") override {
         return vistor.visitVarSymbol(*this, additional);
     }
@@ -72,22 +73,23 @@ public:
 
     // std::shared_ptr<FunctionDecl> decl; //存放AST，作为代码来运行
 
-    FunctionSymbol(const std::string& name, Type& theType, const std::vector<std::shared_ptr<Symbol>> vars = {}):  Symbol(name, theType, SymKind::Function), vars(vars)
-        {
+    FunctionSymbol(const std::string& name, std::shared_ptr<Type>& theType, std::vector<std::shared_ptr<Symbol>> vars = {}):
+        Symbol(name, theType, SymKind::Function), vars(vars)
+    {
     }
 
-    /**
-     * visitor模式
-     * @param vistor
-     * @param additional 额外需要传递给visitor的信息。
-     */
+    //
+    // visitor模式
+    // @param vistor
+    // @param additional 额外需要传递给visitor的信息。
+    //
     std::any accept(SymbolVisitor& vistor, std::string additional) override {
         return vistor.visitFunctionSymbol(*this, additional);
     }
 
     //获取参数数量
     uint32_t getNumParams(){
-        auto ptr = dynamic_cast<FunctionType*>(&this->theType);
+        auto ptr = std::dynamic_pointer_cast<FunctionType>(this->theType);
         if (ptr == nullptr) {
             dbg("error: this->theType is not FunctionType!");
             return 0;
@@ -103,23 +105,23 @@ public:
     }
 
 
-    /*
-     * 输出VarSymbol的调试信息
-     * @param sym
-     * @param additional 前缀字符串
-     */
+    //
+    // 输出VarSymbol的调试信息
+    // @param sym
+    // @param additional 前缀字符串
+    //
     std::any visitVarSymbol(VarSymbol& sym, std::string additional) override {
-        dbg(additional + sym.name + "{" + SymKindtoString(sym.kind) + "}");
+        Print(additional + sym.name + "{" + SymKindtoString(sym.kind) + "}");
         return std::any();
     }
 
-    /**
-     * 输出FunctionSymbol的调试信息
-     * @param sym
-     * @param additional 前缀字符串
-     */
+    //
+    // 输出FunctionSymbol的调试信息
+    // @param sym
+    // @param additional 前缀字符串
+    //
     std::any visitFunctionSymbol(FunctionSymbol&sym, std::string additional) override {
-        dbg(additional + sym.name + "{" + SymKindtoString(sym.kind) + ", local var count:"+ std::to_string(sym.vars.size())+ "}");
+        Print(additional + sym.name + "{" + SymKindtoString(sym.kind) + ", local var count:"+ std::to_string(sym.vars.size())+ "}");
         //输出字节码
         if (!sym.byteCode.empty()){
             std::string str;
@@ -129,11 +131,12 @@ public:
                 str += tmp;
                 str += " ";
             }
-            dbg(additional + "    bytecode: " + str);
+            Print(additional + "    bytecode: " + str);
         }
         return std::any();
     }
 };
 
-extern std::map<std::string, FunctionSymbol&> built_ins;
+extern std::map<std::string, std::shared_ptr<FunctionSymbol>> built_ins;
+
 #endif

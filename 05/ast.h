@@ -123,7 +123,7 @@ public:
         AstNode(beginPos, endPos, isErrorNode){
     }
 
-    Type* theType {nullptr};
+    std::shared_ptr<Type> theType;
     bool shouldBeLeftValue {false}; //当前位置需要一个左值。赋值符号、点符号的左边，需要左值。
     bool isLeftValue {false};       //是否是一个左值
     std::any constValue;        //本表达式的常量值。在常量折叠、流程分析等时候有用。
@@ -131,7 +131,7 @@ public:
     //推断出来的类型。
     //这个类型一般是theType的子类型。比如，theType是any，但inferredType是number.
 
-    Type* inferredType {nullptr};
+    std::shared_ptr<Type> inferredType;
 };
 
 class ErrorExp: public Expression{
@@ -163,7 +163,7 @@ public:
     uint32_t value;
     IntegerLiteral(Position beginPos, uint32_t value, bool isErrorNode = false):
         Expression(beginPos, beginPos, isErrorNode), value(value){
-        this->theType = &SysTypes::Integer;
+        this->theType = SysTypes::Integer();
         this->constValue = value;
     }
     std::any accept(AstVisitor& visitor, std::string additional) override {
@@ -221,11 +221,11 @@ public:
  */
 class VariableDecl: public Decl{
 public:
-    Type* theType{nullptr};       //变量类型
+    std::shared_ptr<Type> theType;       //变量类型
     std::shared_ptr<AstNode> init; //变量初始化所使用的表达式
     std::shared_ptr<VarSymbol> sym;
-    Type* inferredType{nullptr}; //推测出的类型
-    VariableDecl(Position beginPos, Position endPos,const std::string& name, Type* theType, std::shared_ptr<AstNode>& init, bool isErrorNode = false):
+    std::shared_ptr<Type> inferredType; //推测出的类型
+    VariableDecl(Position beginPos, Position endPos,const std::string& name, std::shared_ptr<Type>& theType, std::shared_ptr<AstNode>& init, bool isErrorNode = false):
         Decl(beginPos, endPos,name, isErrorNode),theType(theType), init(init) {
     }
     std::any accept(AstVisitor& visitor, std::string additional) override {
@@ -276,9 +276,9 @@ public:
 class CallSignature: public AstNode{
 public:
     std::shared_ptr<AstNode> paramList;
-    Type* theType;       //返回值类型
+    std::shared_ptr<Type> theType;       //返回值类型
     CallSignature(Position beginPos, Position endPos,
-        std::shared_ptr<AstNode>& paramList, Type* theType,
+        std::shared_ptr<AstNode>& paramList, std::shared_ptr<Type>& theType,
         bool isErrorNode = false): AstNode(beginPos, endPos, isErrorNode),
         paramList(paramList), theType(theType){
     }

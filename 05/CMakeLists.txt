@@ -11,11 +11,11 @@ SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 
 SET(MAIN_FILE  "play.cpp")
-SET(SRC_FILE  "types.cpp"
-              "symbol.cpp"
-              "common.cpp"
-              "ast.cpp"
+SET(SRC_FILE  "common.cpp"
               "scanner.cpp"
+              "types.cpp"
+              "symbol.cpp"
+              "ast.cpp"
               "parser.cpp"
                        )
 add_executable(${PROJECT_NAME} ${SRC_FILE} ${MAIN_FILE})

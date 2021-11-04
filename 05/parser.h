@@ -151,14 +151,15 @@ public:
                 this->scanner.next();
                 init = this->parseExpression();
             }
-
-            return std::make_shared<VariableDecl>(beginPos, this->scanner.getLastPos(), varName, &this->parseType(varType), init, isErrorNode);
+            auto type = this->parseType(varType);
+            return std::make_shared<VariableDecl>(beginPos, this->scanner.getLastPos(), varName, type, init, isErrorNode);
         }
         else{
             this->addError("Expecting variable name in VariableDecl, while we meet " + t.text, this->scanner.getLastPos());
             this->skip();
             std::shared_ptr<AstNode> init;
-            return std::make_shared<VariableDecl>(beginPos, this->scanner.getLastPos(), "unknown", &SysTypes::Any, init, true);
+            auto type = SysTypes::Any();
+            return std::make_shared<VariableDecl>(beginPos, this->scanner.getLastPos(), "unknown", type, init, true);
         }
     }
 
@@ -186,7 +187,8 @@ public:
             this->addError("Expecting '(' in FunctionDecl, while we got a " + t.text, this->scanner.getLastPos());
             this->skip();
             std::shared_ptr<AstNode> paramList;
-            callSignature = std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList,&SysTypes::Any,true);
+            auto type = SysTypes::Any();
+            callSignature = std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList, type,true);
         }
 
         //解析block
@@ -226,11 +228,13 @@ public:
             if (CheckType<Seperator>(this->scanner.peek().code, Seperator::Colon)){  //':'
                 theType = this->parseTypeAnnotation();
             }
-            return std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList, &this->parseType(theType));
+            auto type = this->parseType(theType);
+            return std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList, type);
         }
         else{
             this->addError("Expecting a ')' after for a call signature", this->scanner.getLastPos());
-            return std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList, &SysTypes::Any, true);
+            auto type = SysTypes::Any();
+            return std::make_shared<CallSignature>(beginPos,this->scanner.getLastPos(),paramList, type, true);
         }
     }
 
@@ -268,7 +272,8 @@ public:
                     theType = this->parseTypeAnnotation();
                 }
                 std::shared_ptr<AstNode> init;
-                params.push_back(std::make_shared<VariableDecl>(beginPos, this->scanner.getLastPos(), t.text, &this->parseType(theType), init));
+                auto type = this->parseType(theType);
+                params.push_back(std::make_shared<VariableDecl>(beginPos, this->scanner.getLastPos(), t.text, type, init));
 
                 //处理','
                 t = this->scanner.peek();
@@ -567,15 +572,15 @@ public:
     }
 
 
-    Type& parseType(const std::string& typeName){
-        static std::map<std::string, Type&> str2Type = {
-            {"any", SysTypes::Any},
-            {"number", SysTypes::Number},
-            {"boolean", SysTypes::Boolean},
-            {"string", SysTypes::String},
-            {"undefined", SysTypes::Undefined},
-            {"null", SysTypes::Null},
-            {"void", SysTypes::Undefined},
+    std::shared_ptr<Type> parseType(const std::string& typeName){
+        static std::map<std::string, std::shared_ptr<Type>> str2Type = {
+            {"any", SysTypes::Any()},
+            {"number", SysTypes::Number()},
+            {"boolean", SysTypes::Boolean()},
+            {"string", SysTypes::String()},
+            {"undefined", SysTypes::Undefined()},
+            {"null", SysTypes::Null()},
+            {"void", SysTypes::Undefined()},
         };
 
         auto it = str2Type.find(typeName);
@@ -584,7 +589,7 @@ public:
         }
 
         this->addError("Unrecognized type: "+typeName, this->scanner.getLastPos());
-        return SysTypes::Any;
+        return SysTypes::Any();
     }
 
     int32_t getPrec(Op op) {

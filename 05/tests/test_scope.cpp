@@ -9,9 +9,10 @@ TEST(SCOPE, Scope_default)
     std::string name = "a";
 
     Scope scope(nullptr);
-    std::shared_ptr<Symbol> FUN_println_varSymbol = std::make_shared<VarSymbol>(name, SysTypes::String);
+    auto varType = SysTypes::String();
+    std::shared_ptr<Symbol> varSymbol = std::make_shared<VarSymbol>(name, varType);
 
-    scope.enter(name, FUN_println_varSymbol);
+    scope.enter(name, varSymbol);
     bool has = scope.hasSymbol(name);
     EXPECT_TRUE(has);
 

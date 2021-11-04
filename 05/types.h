@@ -47,23 +47,19 @@ public:
     virtual bool isSimpleType() = 0;
     virtual bool isFunctionType() = 0;
 
-    virtual bool LE(Type& type2) = 0;
+    virtual  bool LE(std::shared_ptr<Type>& type2) = 0;
 
-    static Type& getUpperBound(Type& type1, Type& type2);
+    static std::shared_ptr<Type> getUpperBound(std::shared_ptr<Type>& type1, std::shared_ptr<Type>& type2);
 };
 
 bool operator==(const Type& ls, const Type& rs);
 
-class SimpleType: public Type{
-    std::vector<Type*> upperTypes;
-    std::vector<std::shared_ptr<Type>> upperTypes_;
-public:
-    SimpleType(const std::string& name, std::vector<Type*> upperTypes = {}):
-        Type(name), upperTypes(upperTypes){
-    }
 
-    SimpleType(int hold, const std::string& name, std::vector<std::shared_ptr<Type>> upperTypes_ = {}):
-        Type(name), upperTypes_(upperTypes_){
+class SimpleType: public Type{
+    std::vector<std::shared_ptr<Type>> upperTypes;
+public:
+    SimpleType(const std::string& name, std::vector<std::shared_ptr<Type>> upperTypes = {}):
+        Type(name), upperTypes(upperTypes){
     }
 
     bool hasVoid() override;
@@ -84,100 +80,87 @@ public:
         return false;
     }
 
-    bool LE(Type& type2);
+    bool LE(std::shared_ptr<Type>& type2) override;
 };
 
 class SysTypes {
 public:
     //所有类型的父类型
-    static SimpleType Any;
-
-    static std::shared_ptr<Type> AnyType() {
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "any");
-        return type;
-    }
-
-    static std::shared_ptr<Type> StringType() {
-        auto any = AnyType();
-        std::vector<std::shared_ptr<Type>> vec{any};
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "string", vec);
-        return type;
-    }
-
-    static std::shared_ptr<Type> NumberType() {
-        auto any = AnyType();
-        std::vector<std::shared_ptr<Type>> vec{any};
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "number", vec);
-        return type;
-    }
-
-    static std::shared_ptr<Type> BooleanType() {
-        auto any = AnyType();
-        std::vector<std::shared_ptr<Type>> vec{any};
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "boolean", vec);
-        return type;
-    }
-
-    static std::shared_ptr<Type> NullType() {
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "null");
-        return type;
-    }
-
-    static std::shared_ptr<Type> UndefinedType() {
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "undefined");
-        return type;
-    }
-
-    static std::shared_ptr<Type> VoidType() {
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "void");
-        return type;
-    }
-
-    static std::shared_ptr<Type> IntegerType() {
-        auto number = NumberType();
-        std::vector<std::shared_ptr<Type>> vec{number};
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "integer", vec);
-        return type;
-    }
-
-    static std::shared_ptr<Type> DecimalType() {
-        auto number = NumberType();
-        std::vector<std::shared_ptr<Type>> vec{number};
-        static std::shared_ptr<Type> type = std::make_shared<SimpleType>(0, "decimal", vec);
+    static std::shared_ptr<Type> Any() {
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("any");
         return type;
     }
 
     //基础类型
-    static SimpleType String;
-    static SimpleType Number;
-    static SimpleType Boolean;
+    static std::shared_ptr<Type> String() {
+        auto any = Any();
+        std::vector<std::shared_ptr<Type>> vec{any};
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("string", vec);
+        return type;
+    }
+
+    static std::shared_ptr<Type> Number() {
+        auto any = Any();
+        std::vector<std::shared_ptr<Type>> vec{any};
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("number", vec);
+        return type;
+    }
+
+    static std::shared_ptr<Type> Boolean() {
+        auto any = Any();
+        std::vector<std::shared_ptr<Type>> vec{any};
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("boolean", vec);
+        return type;
+    }
 
     //所有类型的子类型
-    static SimpleType Null;
-    static SimpleType Undefined;
+    static std::shared_ptr<Type> Null() {
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("null");
+        return type;
+    }
+
+    static std::shared_ptr<Type> Undefined() {
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("undefined");
+        return type;
+    }
 
     //函数没有任何返回值的情况
     //如果作为变量的类型，则智能赋值为null和undefined
-    static SimpleType Void;
+    static std::shared_ptr<Type> Void() {
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("void");
+        return type;
+    }
 
     //两个Number的子类型
-    static SimpleType Integer;
-    static SimpleType Decimal;
-
-    static isSysType(const Type& t){
-        return t == SysTypes::Any || t == SysTypes::String || t == SysTypes::Number ||
-               t == SysTypes::Boolean || t == SysTypes::Null || t == SysTypes::Undefined ||
-               t == SysTypes::Void || t == SysTypes::Integer || t == SysTypes::Decimal;
+    static std::shared_ptr<Type> Integer() {
+        auto number = Number();
+        std::vector<std::shared_ptr<Type>> vec{number};
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("integer", vec);
+        return type;
     }
+
+    static std::shared_ptr<Type> Decimal() {
+        auto number = Number();
+        std::vector<std::shared_ptr<Type>> vec{number};
+        static std::shared_ptr<Type> type = std::make_shared<SimpleType>("decimal", vec);
+        return type;
+    }
+
+    static isSysType(std::shared_ptr<Type>& t){
+        return *t == *SysTypes::Any()     || *t == *SysTypes::String()  || *t == *SysTypes::Number() ||
+               *t == *SysTypes::Boolean() || *t == *SysTypes::Null()    || *t == *SysTypes::Undefined() ||
+               *t == *SysTypes::Void()    || *t == *SysTypes::Integer() || *t == *SysTypes::Decimal();
+    }
+
 };
 
 
 class FunctionType: public Type{
 public:
-    Type* returnType;
-    std::vector<Type*>  paramTypes;
+    std::shared_ptr<Type> returnType;
+    std::vector<std::shared_ptr<Type>>  paramTypes;
     static int32_t index; //序号，用于给函数类型命名
-    FunctionType(Type* returnType = &SysTypes::Void, const std::vector<Type*>& paramTypes = {},
+    FunctionType(std::shared_ptr<Type> returnType = SysTypes::Void(), const std::vector<std::shared_ptr<Type>>& paramTypes = {},
         std::string name = ""): Type("@function"), returnType(returnType), paramTypes(paramTypes){
         //用一个非法字符@，避免与已有的符号名称冲突
         if (name != "") {
@@ -208,11 +191,11 @@ public:
         return "FunctionType {name: " + this->name + ", returnType: " + this->returnType->name + ", paramTypes: " + paramTypeNames+ "}";
     }
 
-    bool LE(Type& type2) override {
-        if (type2 == SysTypes::Any){
+    bool LE(std::shared_ptr<Type>& type2) override {
+        if (*type2 == *SysTypes::Any()){
              return true;
         }
-        else if (*this == type2){
+        else if (*this == *type2){
             return true;
         }
         // else if (Type.isUnionType(type2)){
@@ -231,8 +214,5 @@ public:
         return false;
     }
 };
-
-
-
 
 #endif

@@ -9,10 +9,11 @@ TEST(AST, Ast_default)
     // println(circleArea(r));
 
     Position pos;
-    auto type = SysTypes::Integer;
+    auto type = SysTypes::Integer();
+
     // let r:number = 4;
     std::shared_ptr<AstNode> init = std::make_shared<IntegerLiteral>(pos, 4);
-    std::shared_ptr<AstNode> var = std::make_shared<VariableDecl>(pos, pos, "r", &type, init);
+    std::shared_ptr<AstNode> var = std::make_shared<VariableDecl>(pos, pos, "r", type, init);
     std::shared_ptr<AstNode> stmt1 = std::make_shared<VariableStatement>(pos, pos, var);
 
     // println(circleArea(r));
@@ -40,21 +41,21 @@ TEST(AST, Ast_function)
     // println(circleArea(r));
 
     Position pos;
-    auto type = SysTypes::Integer;
+    auto type = SysTypes::Integer();
 
     // CallSignature function circleArea(r : number):number
     std::shared_ptr<AstNode> init;
-    std::shared_ptr<AstNode> para = std::make_shared<VariableDecl>(pos, pos, "r", &type, init);
+    std::shared_ptr<AstNode> para = std::make_shared<VariableDecl>(pos, pos, "r", type, init);
     std::vector<std::shared_ptr<AstNode>> parms {para};
     std::shared_ptr<AstNode> paraList = std::make_shared<ParameterList>(pos, pos, parms);
-    std::shared_ptr<AstNode> callSignature = std::make_shared<CallSignature>(pos, pos, paraList, &type);
+    std::shared_ptr<AstNode> callSignature = std::make_shared<CallSignature>(pos, pos, paraList, type);
 
     // function block
     // 4 * area
     std::shared_ptr<AstNode> intger = std::make_shared<IntegerLiteral>(pos, 4);
     std::shared_ptr<AstNode> r = std::make_shared<Variable>(pos, pos, "area");
     std::shared_ptr<AstNode> op = std::make_shared<Binary>(Op::Multiply, intger, r);
-    std::shared_ptr<AstNode> var = std::make_shared<VariableDecl>(pos, pos, "area", &type, op);
+    std::shared_ptr<AstNode> var = std::make_shared<VariableDecl>(pos, pos, "area", type, op);
     std::shared_ptr<AstNode> stmt = std::make_shared<VariableStatement>(pos, pos, var);
 
     // return area

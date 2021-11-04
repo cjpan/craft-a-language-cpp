@@ -157,7 +157,7 @@ public:
             this->addError("Dumplicate symbol: "+ variableDecl.name, variableDecl);
         }
         //把变量加入当前的符号表
-        auto sym = std::make_shared<VarSymbol>(variableDecl.name, *variableDecl.theType);
+        auto sym = std::make_shared<VarSymbol>(variableDecl.name, variableDecl.theType);
         variableDecl.sym = sym;
         currentScope->enter(variableDecl.name, sym);
 
