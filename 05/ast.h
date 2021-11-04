@@ -481,4 +481,43 @@ public:
     }
 };
 
+
+class ScopeDumper: public AstVisitor{
+public:
+    std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
+        dbg(prefix + "Scope of function: " + functionDecl.name);
+
+        //显示本级Scope
+        if(functionDecl.scope != nullptr){
+            this->dumpScope(functionDecl.scope, prefix);
+        }
+        else{
+            dbg(prefix + "{null}");
+        }
+
+        //继续遍历
+        AstVisitor::visitFunctionDecl(functionDecl, prefix+"    ");
+
+        return std::any();
+    }
+
+    std::any visitBlock(Block& block, std::string prefix) override {
+        dbg(prefix + "Scope of block");
+        //显示本级Scope
+        if(block.scope != nullptr){
+            this->dumpScope(block.scope, prefix);
+        }
+        else{
+            dbg(prefix + "{null}");
+        }
+
+        //继续遍历
+        AstVisitor::visitBlock(block, prefix+"    ");
+        return std::any();
+    }
+
+    void dumpScope(std::shared_ptr<Scope>& scope, std::string prefix) {
+        return;
+    }
+};
 #endif
