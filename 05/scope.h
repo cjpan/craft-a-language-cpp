@@ -7,9 +7,10 @@
 #include <memory>
 
 class Scope{
+public:
     //以名称为key存储符号
     std::map<std::string, std::shared_ptr<Symbol>> name2sym;
-public:
+
     //上级作用域
     std::shared_ptr<Scope> enclosingScope {nullptr}; //顶级作用域的上一级是null
 

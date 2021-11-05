@@ -485,14 +485,14 @@ public:
 class ScopeDumper: public AstVisitor{
 public:
     std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
-        dbg(prefix + "Scope of function: " + functionDecl.name);
+        Print(prefix + "Scope of function: " + functionDecl.name);
 
         //显示本级Scope
         if(functionDecl.scope != nullptr){
             this->dumpScope(functionDecl.scope, prefix);
         }
         else{
-            dbg(prefix + "{null}");
+            Print(prefix + "{null}");
         }
 
         //继续遍历
@@ -502,13 +502,13 @@ public:
     }
 
     std::any visitBlock(Block& block, std::string prefix) override {
-        dbg(prefix + "Scope of block");
+        Print(prefix + "Scope of block");
         //显示本级Scope
         if(block.scope != nullptr){
             this->dumpScope(block.scope, prefix);
         }
         else{
-            dbg(prefix + "{null}");
+            Print(prefix + "{null}");
         }
 
         //继续遍历
@@ -517,7 +517,16 @@ public:
     }
 
     void dumpScope(std::shared_ptr<Scope>& scope, std::string prefix) {
-        return;
+        if (scope->name2sym.size()>0){
+            //遍历该作用域的符号。
+            SymbolDumper symbolDumper;
+            for (auto sym: scope->name2sym){
+                symbolDumper.visit(*sym.second,prefix+"    ");
+            }
+        }
+        else{
+            Print(prefix + "    {empty}");
+        }
     }
 };
 #endif
