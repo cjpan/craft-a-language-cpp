@@ -1,5 +1,5 @@
-#ifndef __PARSE_H_
-#define __PARSE_H_
+#ifndef __SEMANTICT_H_
+#define __SEMANTICT_H_
 
 #include "scanner.h"
 #include "error.h"
@@ -29,9 +29,10 @@ public:
 
 
 class SemanticAstVisitor: public AstVisitor{
+public:
     std::vector<std::shared_ptr<CompilerError>> errors;   //语义错误
     std::vector<std::shared_ptr<CompilerError>> warnings; //语义报警信息
-public:
+
     void addError(const std::string& msg, AstNode& node){
         auto error = std::make_shared<SemanticError>(msg,node);
         this->errors.push_back(error);
@@ -169,6 +170,159 @@ public:
         return std::any();
     }
 
+};
+
+
+/**
+ * 引用消解
+ * 遍历AST。如果发现函数调用和变量引用，就去找它的定义。
+ */
+class RefResolver: public SemanticAstVisitor{
+public:
+    std::shared_ptr<Scope> scope;
+    std::map<uint32_t, std::shared_ptr<Scope>> idToScope;
+    std::map<uint32_t, std::map<std::string, std::shared_ptr<Symbol>>> declaredVarsMap;
+
+    std::any visitBlock(Block& block, std::string prefix) override {
+        //创建下一级scope
+        auto oldScope = this->scope;
+        this->scope = std::make_shared<Scope>(this->scope);
+        block.scope = this->scope;
+
+        //调用父类的方法，遍历所有的语句
+        AstVisitor::visitBlock(block);
+
+        //重新设置当前的Scope
+        this->scope = oldScope;
+
+        return std::any();
+    }
+
+    std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
+        //1.修改scope
+        auto oldScope = this->scope;
+        this->scope = functionDecl.scope;
+        if(this->scope != nullptr) {
+            dbg("error: functionDecl.scope must not be nullptr!");
+            return std::any();
+        }
+
+        //为已声明的变量设置一个存储区域
+        this->idToScope.insert({this->scope->id, this->scope});
+        this->declaredVarsMap.insert({this->scope->id, {}});
+
+        //2.遍历下级节点
+        AstVisitor::visitFunctionDecl(functionDecl);
+
+        //3.重新设置scope
+        this->scope = oldScope;
+
+        return std::any();
+    }
+
+    std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
+        auto currentScope = this->scope;
+        // console.log("in semantic.visitFunctionCall: " + functionCall.name);
+        auto it = built_ins.find(functionCall.name);
+        if (it != built_ins.end()){  //系统内置函数
+            functionCall.sym = std::dynamic_pointer_cast<FunctionSymbol>(it->second);
+        }
+        else{
+            auto sym = currentScope->getSymbolCascade(functionCall.name);
+            functionCall.sym = std::dynamic_pointer_cast<FunctionSymbol>(sym);;
+        }
+
+        // console.log(functionCall.sym);
+
+        //调用下级，主要是参数。
+        AstVisitor::visitFunctionCall(functionCall);
+
+        return std::any();
+    }
+
+    /**
+     * 标记变量是否已被声明
+     * @param variableDecl
+     */
+    std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
+        auto currentScope = this->scope;
+        auto declaredSyms = this->declaredVarsMap.find(currentScope->id);
+        auto sym = currentScope->getSymbol(variableDecl.name);
+        if (sym != nullptr){  //TODO 需要检查sym是否是变量
+            declaredSyms->second.insert({variableDecl.name, sym});
+        }
+
+        //处理初始化的部分
+        AstVisitor::visitVariableDecl(variableDecl);
+
+        return std::any();
+    }
+
+    /**
+     * 变量引用消解
+     * 变量必须声明在前，使用在后。
+     * @param variable
+     */
+    std::any visitVariable(Variable& variable, std::string prefix) override {
+        auto currentScope = this->scope;
+        variable.sym = this->findVariableCascade(currentScope, variable);
+
+        return std::any();
+    }
+    /**
+     * 逐级查找某个符号是不是在声明前就使用了。
+     * @param scope
+     * @param name
+     * @param kind
+     */
+    std::shared_ptr<Symbol> findVariableCascade(std::shared_ptr<Scope>& scope, Variable& variable) {
+        auto declaredSyms = this->declaredVarsMap.find(scope->id);
+        auto symInScope = scope->getSymbol(variable.name);
+        if (symInScope != nullptr){
+            auto it = declaredSyms->second.find(variable.name);
+            if (it != declaredSyms->second.end()){
+                return it->second; //找到了，成功返回。
+            }
+            else{
+                if (symInScope->kind == SymKind::Variable){
+                    this->addError("Variable: '" + variable.name + "' is used before declaration.", variable);
+                }
+                else{
+                    this->addError("We expect a variable of name: '" + variable.name + "', but find a " + SymKindtoString(symInScope->kind) + ".", variable);
+                }
+            }
+        }
+        else{
+            if (scope->enclosingScope != nullptr){
+                return this->findVariableCascade(scope->enclosingScope, variable);
+            }
+            else{
+                this->addError("Cannot find a variable of name: '" + variable.name +"'", variable);
+            }
+        }
+
+        return nullptr;
+    }
+
+};
+
+class SemanticAnalyer {
+public:
+    std::vector<std::shared_ptr<SemanticAstVisitor>> passes = {
+        std::make_shared<Enter>(),
+        std::make_shared<RefResolver>(),
+    };
+
+    std::vector<std::shared_ptr<CompilerError>> errors;   //语义错误
+    std::vector<std::shared_ptr<CompilerError>> warnings; //语义报警信息
+
+    void execute(AstNode& prog) {
+        for (auto pass: this->passes){
+            pass->visit(prog);
+            this->errors.insert(this->errors.end(), pass->errors.begin(), pass->errors.end());
+            this->warnings.insert(this->warnings.end(), pass->warnings.begin(), pass->warnings.end());
+        }
+    }
 };
 
 #endif

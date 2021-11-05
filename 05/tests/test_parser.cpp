@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 
-
 TEST(Parser, variable)
 {
     std::string expect =

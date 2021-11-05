@@ -8,6 +8,7 @@
 
 class Scope{
 public:
+    static uint32_t id;
     //以名称为key存储符号
     std::map<std::string, std::shared_ptr<Symbol>> name2sym;
 
@@ -15,6 +16,7 @@ public:
     std::shared_ptr<Scope> enclosingScope {nullptr}; //顶级作用域的上一级是null
 
     Scope(std::shared_ptr<Scope> enclosingScope): enclosingScope(enclosingScope){
+        id++;
     }
 
     /**
