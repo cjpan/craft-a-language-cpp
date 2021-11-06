@@ -352,8 +352,16 @@ public:
 class AstDumper: public AstVisitor{
     std::stringstream ss;
 public:
+    std::any visit(AstNode& node, std::string prefix) override {
+        return AstVisitor::visit(node, prefix);
+    }
+
     std::string toString() {
         return ss.str();
+    }
+
+    void clearString() {
+        ss.str(std::string());
     }
 
     std::any visitParameterList(ParameterList& paramList, std::string prefix) override {

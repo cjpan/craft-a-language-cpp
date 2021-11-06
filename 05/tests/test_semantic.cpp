@@ -13,9 +13,15 @@ R"(Prog
     VariableStatement
         VariableDecl i(any)
             100(integer)
+    ExpressionStatement
+        FunctionCall println, built-in
+            Variable: i, resolved
 )";
 
-    std::string program = "let i = 100;";
+    std::string program = R"(
+let i = 100;
+println(i);
+)";
     CharStream charStream(program);
     Scanner scanner(charStream);
 
@@ -25,13 +31,13 @@ R"(Prog
     auto dumper = AstDumper();
     dumper.visit(*ast, "");
 
-    auto str = dumper.toString();
-    EXPECT_STREQ(expect.c_str(), str.c_str());
-
     SemanticAnalyer semanticAnalyer;
     semanticAnalyer.execute(*ast);
 
+    dumper.clearString();
     dumper.visit(*ast, "");
+    auto str = dumper.toString();
+    EXPECT_STREQ(expect.c_str(), str.c_str());
 
     auto scopeDumper = ScopeDumper();
     scopeDumper.visit(*ast, "");

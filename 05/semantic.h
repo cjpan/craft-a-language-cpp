@@ -183,16 +183,24 @@ public:
     std::map<uint32_t, std::shared_ptr<Scope>> idToScope;
     std::map<uint32_t, std::map<std::string, std::shared_ptr<Symbol>>> declaredVarsMap;
 
-    std::any visitBlock(Block& block, std::string prefix) override {
-        //创建下一级scope
-        auto oldScope = this->scope;
-        this->scope = std::make_shared<Scope>(this->scope);
-        block.scope = this->scope;
 
-        //调用父类的方法，遍历所有的语句
+    std::any visitBlock(Block& block, std::string prefix) override {
+        //1.修改scope
+        auto oldScope = this->scope;
+        this->scope = block.scope;
+        if(this->scope == nullptr) {
+             dbg("error: block.scope must not be nullptr!");
+             return std::any();
+        }
+
+        //为已声明的变量设置一个存储区域
+        this->idToScope.insert({this->scope->id, this->scope});
+        this->declaredVarsMap.insert({this->scope->id, {}});
+
+        //2.遍历下级节点
         AstVisitor::visitBlock(block);
 
-        //重新设置当前的Scope
+        //3.重新设置scope
         this->scope = oldScope;
 
         return std::any();
@@ -202,7 +210,7 @@ public:
         //1.修改scope
         auto oldScope = this->scope;
         this->scope = functionDecl.scope;
-        if(this->scope != nullptr) {
+        if(this->scope == nullptr) {
             dbg("error: functionDecl.scope must not be nullptr!");
             return std::any();
         }
@@ -250,6 +258,7 @@ public:
         auto sym = currentScope->getSymbol(variableDecl.name);
         if (sym != nullptr){  //TODO 需要检查sym是否是变量
             declaredSyms->second.insert({variableDecl.name, sym});
+            dbg("insert sym variableDecl: " + variableDecl.name);
         }
 
         //处理初始化的部分
