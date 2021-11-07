@@ -66,9 +66,8 @@ public:
     virtual std::any visitVariable(Variable& node, std::string additional = "") {
         return std::any();
     }
-    virtual std::any visitIntegerLiteral(IntegerLiteral& node, std::string additional = "") {
-        return std::any();
-    }
+    virtual std::any visitIntegerLiteral(IntegerLiteral& node, std::string additional = "");
+
     virtual std::any visitErrorStmt(ErrorStmt& node, std::string additional = "") {
         return std::any();
     }
@@ -160,8 +159,8 @@ public:
 
 class IntegerLiteral: public Expression{
 public:
-    uint32_t value;
-    IntegerLiteral(Position beginPos, uint32_t value, bool isErrorNode = false):
+    int32_t value;
+    IntegerLiteral(Position beginPos, int32_t value, bool isErrorNode = false):
         Expression(beginPos, beginPos, isErrorNode), value(value){
         this->theType = SysTypes::Integer();
         this->constValue = value;

@@ -18,6 +18,12 @@
 #include <memory>
 #include <any>
 #include <stdint.h>
+#include <functional>
+#include <typeindex>
+#include <typeinfo>
+#include <type_traits>
+#include <mutex>
+#include <optional>
 
 //
 // 栈桢
@@ -41,17 +47,32 @@ struct ReturnValue{
     }
 };
 
-class Intepretor: public AstVisitor{
+class Interpretor: public AstVisitor{
+public:
     //调用栈
     std::vector<std::shared_ptr<StackFrame>> callStack;
 
     //当前栈桢
     std::shared_ptr<StackFrame> currentFrame;
 
-    Intepretor() {
+    using BinaryFunction = std::function<std::any(const std::any&, const std::any&)>;
+    static std::map<Op,
+                    std::map<std::type_index,
+                        std::map<std::type_index,
+                            BinaryFunction>>> binaryOp;
+    static void InitBinaryFunction();
+    static std::optional<BinaryFunction> GetBinaryFunction(Op op, const std::any& l, const std::any& r);
+
+    static std::once_flag flag;
+
+    Interpretor() {
         //创建顶层的栈桢
         this->currentFrame = std::make_shared<StackFrame>();
         this->callStack.push_back(this->currentFrame);
+        std::call_once(flag, [](){
+            dbg("InitBinaryFunction: called once");
+            InitBinaryFunction();
+        });
     }
 
     void pushFrame(std::shared_ptr<StackFrame>& frame){
@@ -119,6 +140,7 @@ class Intepretor: public AstVisitor{
             this->setVariableValue(variableDecl.sym, v);
             return v;
         }
+        return std::any();
     }
 
     std::any visitVariable(Variable& v, std::string prefix) override {
@@ -130,17 +152,83 @@ class Intepretor: public AstVisitor{
         }
     }
 
-    void println(std::vector<std::shared_ptr<AstNode>> args) {
+    std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
+        // console.log("running funciton:" + functionCall.name);
+        if (functionCall.name == "println"){ //内置函数
+            return this->println(functionCall.arguments);
+        }
+        else if (functionCall.name == "tick"){
+            return this->tick();
+        }
+        else if (functionCall.name == "integer_to_string"){
+            return this->integer_to_string(functionCall.arguments);
+        }
+
+        if(functionCall.sym != nullptr){
+            //清空返回值
+            this->currentFrame->retVal = std::any();
+
+            //1.创建新栈桢
+            auto frame = std::make_shared<StackFrame>();
+            //2.计算参数值，并保存到新创建的栈桢
+            auto functionDecl = functionCall.sym->decl;
+            auto callSignature = std::dynamic_pointer_cast<CallSignature>(functionDecl->callSignature);
+            if (callSignature != nullptr && callSignature->paramList != nullptr){
+                auto paramList = std::dynamic_pointer_cast<ParameterList>(callSignature->paramList);
+                auto params = paramList->params;
+                for (uint32_t i = 0; i< params.size(); i++){
+                    auto variableDecl = std::dynamic_pointer_cast<VariableDecl>(params[i]);
+                    auto val = this->visit(*functionCall.arguments[i]);
+                    frame->values.insert({variableDecl->sym->name, val});  //设置到新的frame里。
+                }
+            }
+
+            //3.把新栈桢入栈
+            this->pushFrame(frame);
+
+            //4.执行函数
+            this->visit(*functionDecl->body);
+
+            //5.弹出当前的栈桢
+            this->popFrame();
+
+            //5.函数的返回值
+            return this->currentFrame->retVal;
+        }
+        else{
+            dbg("Runtime error, cannot find declaration of " + functionCall.name +".");
+            return std::any();
+        }
+    }
+
+    std::any visitBinary(Binary& bi, std::string prefix) override {
+        // console.log("visitBinary:" + bi.op);
+        std::any ret;
+        auto v1 = this->visit(*bi.exp1);
+        auto v2 = this->visit(*bi.exp2);
+
+        auto func = Interpretor::GetBinaryFunction(bi.op, v1, v2);
+        if (!func) {
+            dbg("Unsupported binary operation: " + toString(bi.op));
+            return ret;
+        }
+
+        return func.value()(v1, v2);
+    }
+
+    std::any println(std::vector<std::shared_ptr<AstNode>> args) {
         if(args.size() >0){
             auto retVal = this->visit(*args[0]);
             if (retVal.has_value()) {
-                // PrintAny()
                 dbg("call println");
+                PrintAny(retVal);
             }
         }
         else{
             Print("println: None");
         }
+
+        return std::any();
     }
 
     uint32_t tick() {

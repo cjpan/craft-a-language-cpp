@@ -77,3 +77,7 @@ std::any AstVisitor::visitUnary(Unary& exp, std::string additional) {
     return std::any();
 }
 
+std::any AstVisitor::visitIntegerLiteral(IntegerLiteral& node, std::string additional) {
+    return node.value;
+}
+

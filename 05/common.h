@@ -26,4 +26,5 @@ bool CheckType(const std::any& val, T t) {
 
 std::string Print(const std::string& str, Color color = Color::Red);
 
+void PrintAny(const std::any& a);
 #endif
