@@ -8,7 +8,6 @@
 
 TEST(Interpretor, Interpretor_binary_function_plus)
 {
-    dbg("Interpretor_basic");
     std::any v1 = 2;
     std::any v2 = 2;
 
@@ -25,7 +24,6 @@ TEST(Interpretor, Interpretor_binary_function_plus)
 
 TEST(Interpretor, Interpretor_binary_function_minus)
 {
-    dbg("Interpretor_basic");
     std::any v1 = 2;
     std::any v2 = 2;
 
