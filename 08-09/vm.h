@@ -25,7 +25,7 @@
 #include <mutex>
 #include <optional>
 
-enum class OpCode{
+enum OpCode{
     //参考JVM的操作码
     iconst_0 = 0x03,
     iconst_1 = 0x04,
@@ -65,8 +65,8 @@ enum class OpCode{
     if_icmpgt= 0xa3,
     if_icmple= 0xa4,
     igoto     = 0xa7,
-    ireturn_0  = 0xac,
-    ireturn_1   = 0xb1,
+    ireturn  = 0xac,
+    vreturn   = 0xb1,
     invokestatic= 0xb8, //调用函数
 
     //自行扩展的操作码
@@ -131,12 +131,46 @@ public:
         this->m = std::make_shared<BCModule>();
     }
 
+    std::vector<uint8_t>  anyToCode(const std::any& val) {
+        if (val.has_value() && isType<std::vector<uint8_t>>(val)) {
+            return std::any_cast<std::vector<uint8_t>>(val);
+        }
+        return {};
+    }
+
+    std::vector<uint8_t>  concatCodeWithAny(std::vector<uint8_t>& code, const std::any& val) {
+        if (val.has_value() && isType<std::vector<uint8_t>>(val)) {
+            auto vec = std::any_cast<std::vector<uint8_t>>(val);
+            code.insert(code.end(), vec.begin(), vec.end());
+        }
+        return code;
+    }
+
     std::any visitProg(Prog& prog, std::string prefix) override {
-        return std::any();
+        this->functionSym = prog.sym;
+        if ( this->functionSym != nullptr){
+            this->m->consts.push_back(this->functionSym);
+            this->m->_main = this->functionSym;
+            auto byteCode = this->anyToCode(this->visitBlock(prog, prefix));
+            this->functionSym->byteCode = byteCode;
+        }
+
+        return this->m;
     }
 
     std::any visitBlock(Block& block, std::string prefix) override {
-        return std::any();
+        // console.log("visitBlock in BCGenerator" );
+        std::vector<uint8_t> ret;
+        for(auto& x: block.stmts){
+            this->inExpression = false; //每个语句开始的时候，重置
+            auto code = this->visit(*x);
+            if (code.has_value()){  //在visitFunctionDecl的时候，会返回std::any为空，则跳过
+                auto vec = this->anyToCode(code);
+                this->addOffsetToJumpOp(vec, vec.size());
+                ret.insert(ret.end(), vec.begin(), vec.end());
+            }
+        }
+        return ret;
     }
 
     std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
@@ -144,45 +178,263 @@ public:
     }
 
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
-        return std::any();
+        std::vector<uint8_t> code;
+        if (variableDecl.init != nullptr){
+            //获取初始化部分的Code
+            auto ret = this->visit(*variableDecl.init);
+            code = this->concatCodeWithAny(code, ret);
+            //生成变量赋值的指令
+            auto code1 = this->setVariableValue(variableDecl.sym);
+            code = this->concatCodeWithAny(code, code1);
+        }
+        return code;
     }
 
-    std::any visitReturnStatement(ReturnStatement& stmt, std::string prefix) override {
-        return std::any();
+    std::any visitReturnStatement(ReturnStatement& returnStatement, std::string prefix) override {
+        // console.log("visitReturnStatement in BCGenerator" );
+        std::vector<uint8_t> code;
+        //1.为return后面的表达式生成代码
+        if(returnStatement.exp != nullptr){
+            auto code1 = this->visit(*returnStatement.exp);
+            // console.log(code1);
+            code = this->concatCodeWithAny(code, code1);
+            code.push_back(OpCode::ireturn);
+
+            return code;
+        }
+        else{
+            //2.生成return代码，返回值是void
+            code.push_back(OpCode::vreturn);
+            return code;
+        }
     }
 
     std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
         return std::any();
     }
 
-    std::any visitVariable(Variable& variable, std::string prefix) override {
-        return std::any();
+    std::any visitVariable(Variable& v, std::string prefix) override {
+        if (v.isLeftValue){
+            return v.sym;
+        }
+        else{
+            auto sym = std::dynamic_pointer_cast<VarSymbol>(v.sym);
+            if (sym == nullptr) {
+                dbg("Error: visitVariable get sym is nullptr");
+            }
+            return this->getVariableValue(sym);
+        }
     }
 
-    std::any visitIntegerLiteral(IntegerLiteral& exp, std::string prefix) override {
-        return std::any();
+    std::any visitIntegerLiteral(IntegerLiteral& integerLiteral, std::string prefix) override {
+        // console.log("visitIntegerLiteral in BC");
+        std::vector<uint8_t> code;
+        int32_t value = integerLiteral.value;
+        //0-5之间的数字，直接用快捷指令
+        if (value >= 0 && value <= 5) {
+            switch (value) {
+                case 0:
+                    code.push_back(OpCode::iconst_0);
+                    break;
+                case 1:
+                    code.push_back(OpCode::iconst_1);
+                    break;
+                case 2:
+                    code.push_back(OpCode::iconst_2);
+                    break;
+                case 3:
+                    code.push_back(OpCode::iconst_3);
+                    break;
+                case 4:
+                    code.push_back(OpCode::iconst_4);
+                    break;
+                case 5:
+                    code.push_back(OpCode::iconst_5);
+                    break;
+            }
+        }
+
+        //如果是8位整数，用bipush指令，直接放在后面的一个字节的操作数里就行了
+        else if (value >= -128 && value <128){
+            code.push_back(OpCode::bipush);
+            code.push_back(value);
+        }
+
+        //如果是16位整数，用sipush指令
+        else if (value >= -32768 && value <32768){
+            code.push_back(OpCode::sipush);
+            //要拆成两个字节
+            code.push_back(value >> 8);
+            code.push_back(value & 0x00ff);
+        }
+
+        //大于16位的，采用ldc指令，从常量池中去取
+        else{
+            code.push_back(OpCode::ldc);
+            //把value值放入常量池。
+            this->m->consts.push_back(value);
+            code.push_back(this->m->consts.size() - 1);
+        }
+        // console.log(ret);
+        return code;
     }
 
     std::any visitBinary(Binary& exp, std::string prefix) override {
         return std::any();
     }
 
-    std::vector<int8_t> getVariableValue(std::shared_ptr<VarSymbol>& sym) {
-        std::vector<int8_t> code;
+    std::vector<uint8_t> getVariableValue(std::shared_ptr<VarSymbol>& sym) {
+        std::vector<uint8_t> code;
+        if (sym != nullptr){
+            //本地变量的下标
+            auto compare = [&sym](const std::shared_ptr<Symbol> & var) {
+                return sym->name == var->name;
+            };
+            auto iter = std::find_if(this->functionSym->vars.begin(), this->functionSym->vars.end(), compare);
+            if (iter == this->functionSym->vars.end()) {
+                dbg("Error: Can find variable, get val failed!");
+            }
 
+            auto index = iter - this->functionSym->vars.begin();
+            //根据不同的下标生成指令，尽量生成压缩指令
+            switch (index){
+                case 0:
+                    code.push_back(OpCode::iload_0);
+                    break;
+                case 1:
+                    code.push_back(OpCode::iload_1);
+                    break;
+                case 2:
+                    code.push_back(OpCode::iload_2);
+                    break;
+                case 3:
+                    code.push_back(OpCode::iload_3);
+                    break;
+                default:
+                    code.push_back(OpCode::iload);
+                    code.push_back(static_cast<uint8_t>(index));
+                    break;
+            }
+        }
         return code;
     }
 
-    std::vector<int8_t> setVariableValue(std::shared_ptr<VarSymbol>& sym) {
-        std::vector<int8_t> code;
+    std::vector<uint8_t> setVariableValue(std::shared_ptr<VarSymbol>& sym) {
+        std::vector<uint8_t> code;
+        if (sym != nullptr){
+            //本地变量的下标
+            auto compare = [&sym](const std::shared_ptr<Symbol> & var) {
+                return sym->name == var->name;
+            };
+            auto iter = std::find_if(this->functionSym->vars.begin(), this->functionSym->vars.end(), compare);
+            if (iter == this->functionSym->vars.end()) {
+                dbg("Error: Can find variable, set val failed!");
+            }
 
+            auto index = iter - this->functionSym->vars.begin();
+            //根据不同的下标生成指令，尽量生成压缩指令
+            switch (index){
+                case 0:
+                    code.push_back(OpCode::istore_0);
+                    break;
+                case 1:
+                    code.push_back(OpCode::istore_1);
+                    break;
+                case 2:
+                    code.push_back(OpCode::istore_2);
+                    break;
+                case 3:
+                    code.push_back(OpCode::istore_3);
+                    break;
+                default:
+                    code.push_back(OpCode::istore);
+                    code.push_back(static_cast<uint8_t>(index));
+                    break;
+            }
+        }
         return code;
     }
 
-    std::vector<int8_t> addOffsetToJumpOp(std::vector<int8_t> code, uint32_t offset) {
+    void addOffsetToJumpOp(std::vector<uint8_t>& code, uint32_t offset) {
+        if (offset == 0) return;  //短路
+
+        uint32_t codeIndex = 0;
+        while(codeIndex < code.size()){
+            switch(code[codeIndex]){
+                //纯指令，后面不带操作数
+                case OpCode::iadd:
+                case OpCode::sadd:
+                case OpCode::isub:
+                case OpCode::imul:
+                case OpCode::idiv:
+                case OpCode::iconst_0:
+                case OpCode::iconst_1:
+                case OpCode::iconst_2:
+                case OpCode::iconst_3:
+                case OpCode::iconst_4:
+                case OpCode::iconst_5:
+                case OpCode::istore_0:
+                case OpCode::istore_1:
+                case OpCode::istore_2:
+                case OpCode::istore_3:
+                case OpCode::iload_0:
+                case OpCode::iload_1:
+                case OpCode::iload_2:
+                case OpCode::iload_3:
+                case OpCode::ireturn:
+                case OpCode::vreturn:
+                case OpCode::lcmp:
+                    codeIndex++;
+                    break;
+
+                //指令后面带1个字节的操作数
+                case OpCode::iload:
+                case OpCode::istore:
+                case OpCode::bipush:
+                case OpCode::ldc:
+                case OpCode::sldc:
+                    codeIndex +=2;
+                    break;
+
+                //指令后面带2个字节的操作数
+                case OpCode::iinc:
+                case OpCode::invokestatic:
+                case OpCode::sipush:
+                    codeIndex +=3;
+                    break;
+
+                //跳转语句，需要给跳转指令加上offset
+                case OpCode::if_icmpeq:
+                case OpCode::if_icmpne:
+                case OpCode::if_icmpge:
+                case OpCode::if_icmpgt:
+                case OpCode::if_icmple:
+                case OpCode::if_icmplt:
+                case OpCode::ifeq:
+                case OpCode::ifne:
+                case OpCode::ifge:
+                case OpCode::ifgt:
+                case OpCode::ifle:
+                case OpCode::iflt:
+                case OpCode::igoto:
+                {
+                    uint8_t byte1 = code[codeIndex+1];
+                    uint8_t byte2 = code[codeIndex+2];
+                    uint8_t address = (byte1<<8|byte2) + offset;
+                    code[codeIndex+1] = address>>8;
+                    code[codeIndex+2] = address;
+                    codeIndex += 3;
+                    break;
+                }
 
 
-        return {};
+                default:
+                    dbg("unrecognized Op Code in addOffsetToJumpOp: "+ std::to_string(code[codeIndex]));
+                    return;
+            }
+        }
+
+        return;
     }
 
 };
@@ -195,7 +447,7 @@ struct VMStackFrame{
     uint32_t returnIndex = 0;
 
     //本地变量
-    std::vector<int8_t> localVars;
+    std::vector<uint8_t> localVars;
 
     //操作数栈
     std::vector<std::any> oprandStack;

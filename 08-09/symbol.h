@@ -70,7 +70,7 @@ public:
 
     uint32_t opStackSize = 10; //操作数栈的大小
 
-    std::vector<char> byteCode; //存放生成的字节码
+    std::vector<uint8_t> byteCode; //存放生成的字节码
 
     FunctionDecl* decl; //存放AST，作为代码来运行
 
