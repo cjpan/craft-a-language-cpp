@@ -138,12 +138,12 @@ public:
         return {};
     }
 
-    std::vector<uint8_t>  concatCodeWithAny(std::vector<uint8_t>& code, const std::any& val) {
+   void concatCodeWithAny(std::vector<uint8_t>& code, const std::any& val) {
         if (val.has_value() && isType<std::vector<uint8_t>>(val)) {
             auto vec = std::any_cast<std::vector<uint8_t>>(val);
             code.insert(code.end(), vec.begin(), vec.end());
         }
-        return code;
+        return;
     }
 
     std::any visitProg(Prog& prog, std::string prefix) override {
@@ -174,6 +174,29 @@ public:
     }
 
     std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
+        //1.设置当前的函数符号
+        auto lastFunctionSym = this->functionSym;
+        this->functionSym = functionDecl.sym;
+
+        //添加到Module
+        this->m->consts.push_back(this->functionSym);
+
+        //2.为函数体生成代码
+        auto code1 = this->visit(*functionDecl.callSignature);
+        auto code2 = this->visit(*functionDecl.body);
+
+        auto vec1 = this->anyToCode(code1);
+        auto vec2 = this->anyToCode(code2);
+        this->addOffsetToJumpOp(vec2, vec1.size());
+
+        if(this->functionSym != nullptr){
+            this->concatCodeWithAny(vec1, vec2);
+            this->functionSym->byteCode = vec1;
+        }
+
+        //3.恢复当前函数
+        this->functionSym = lastFunctionSym;
+
         return std::any();
     }
 
@@ -182,10 +205,10 @@ public:
         if (variableDecl.init != nullptr){
             //获取初始化部分的Code
             auto ret = this->visit(*variableDecl.init);
-            code = this->concatCodeWithAny(code, ret);
+            this->concatCodeWithAny(code, ret);
             //生成变量赋值的指令
             auto code1 = this->setVariableValue(variableDecl.sym);
-            code = this->concatCodeWithAny(code, code1);
+            this->concatCodeWithAny(code, code1);
         }
         return code;
     }
@@ -197,7 +220,7 @@ public:
         if(returnStatement.exp != nullptr){
             auto code1 = this->visit(*returnStatement.exp);
             // console.log(code1);
-            code = this->concatCodeWithAny(code, code1);
+            this->concatCodeWithAny(code, code1);
             code.push_back(OpCode::ireturn);
 
             return code;
@@ -210,7 +233,37 @@ public:
     }
 
     std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
-        return std::any();
+        // console.log("in AstVisitor.visitFunctionCall "+ functionCall.name);
+        std::vector<uint8_t> code;
+        //1.依次生成与参数计算有关的指令，也就是把参数压到计算栈里
+        for(auto& param: functionCall.arguments){
+            auto code1 = this->visit(*param);
+            this->concatCodeWithAny(code, code1);
+        }
+
+        //2.生成invoke指令
+        // console.log(functionCall.sym);
+
+        //本地变量的下标
+        auto compare = [&functionCall](const std::any& e) {
+            return isType<std::shared_ptr<FunctionSymbol>>(e) &&
+                std::any_cast<std::shared_ptr<FunctionSymbol>>(e)->name == functionCall.sym->name;
+        };
+
+        auto iter = find_if(this->m->consts.begin(), this->m->consts.end(), compare);
+        if (iter ==  this->m->consts.end()) {
+            dbg("Error: Can find functionCall.sym, set val failed!");
+            return std::any();
+        }
+
+        uint16_t index = static_cast<uint16_t>(iter - this->m->consts.begin());
+
+        // console.log(this->module);
+        code.push_back(OpCode::invokestatic);
+        code.push_back(index>>8);
+        code.push_back(index);
+
+        return code;
     }
 
     std::any visitVariable(Variable& v, std::string prefix) override {
@@ -279,8 +332,94 @@ public:
         return code;
     }
 
-    std::any visitBinary(Binary& exp, std::string prefix) override {
-        return std::any();
+    std::any visitBinary(Binary& bi, std::string prefix) override {
+        std::vector<uint8_t> code;
+
+        this->inExpression = true;
+        auto ret1 = this->visit(*bi.exp1);
+        auto ret2 = this->visit(*bi.exp2);
+
+        auto code1 = this->anyToCode(ret1);
+        auto code2 = this->anyToCode(ret2);
+
+        uint16_t address1 = 0;
+        uint16_t address2 = 0;
+        uint8_t tempCode = 0;
+
+        ////1.处理赋值
+        if (bi.op == Op::Assign){
+            // 左值的情况，返回符号
+            dbg("Error: current not support Op::Assign!");
+            return code;
+        }
+        ////2.处理其他二元运算
+        else{
+            //加入左子树的代码
+            code = code1;
+            //加入右子树的代码
+            this->concatCodeWithAny(code, code2);
+            //加入运算符的代码
+            switch(bi.op){
+                case Op::Plus: //'+'
+                    if (*bi.theType == *SysTypes::String()){
+                        code.push_back(OpCode::sadd);
+                    }
+                    else{
+                        code.push_back(OpCode::iadd);
+                    }
+                    break;
+                case Op::Minus: //'-'
+                    code.push_back(OpCode::isub);
+                    break;
+                case Op::Multiply: //'*'
+                    code.push_back(OpCode::imul);
+                    break;
+                case Op::Divide: //'/'
+                    code.push_back(OpCode::idiv);
+                    break;
+                case Op::G:  //'>'
+                case Op::GE: //'>='
+                case Op::L:  //'<'
+                case Op::LE: //'<='
+                case Op::EQ: //'=='
+                case Op::NE: //'!='
+                    if (bi.op ==Op::G){
+                        tempCode = OpCode::if_icmple;
+                    }
+                    else if (bi.op ==Op::GE){
+                        tempCode = OpCode::if_icmplt;
+                    }
+                    else if (bi.op ==Op::L){
+                        tempCode = OpCode::if_icmpge;
+                    }
+                    else if (bi.op ==Op::LE){
+                        tempCode = OpCode::if_icmpgt;
+                    }
+                    else if (bi.op ==Op::EQ){
+                        tempCode = OpCode::if_icmpne;
+                    }
+                    else if (bi.op ==Op::NE){
+                        tempCode = OpCode::if_icmpeq;
+                    }
+
+                    address1 = code.size() + 7;
+                    address2 = address1 + 1;
+                    code.push_back(tempCode);
+                    code.push_back(address1>>8);
+                    code.push_back(address1);
+                    code.push_back(OpCode::iconst_1);
+                    code.push_back(OpCode::igoto);
+                    code.push_back(address2>>8);
+                    code.push_back(address2);
+                    code.push_back(OpCode::iconst_0);
+                    break;
+                default:
+                    dbg("Unsupported binary operation: " + toString(bi.op));
+                    return {};
+            }
+        }
+
+        return code;
     }
 
     std::vector<uint8_t> getVariableValue(std::shared_ptr<VarSymbol>& sym) {
