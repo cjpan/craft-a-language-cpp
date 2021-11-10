@@ -168,6 +168,7 @@ public:
                 auto vec = this->anyToCode(code);
                 this->addOffsetToJumpOp(vec, vec.size());
                 ret.insert(ret.end(), vec.begin(), vec.end());
+                dbg("=====================ret size:" + std::to_string(ret.size()));
             }
         }
         return ret;

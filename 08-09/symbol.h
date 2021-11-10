@@ -126,9 +126,9 @@ public:
         //输出字节码
         if (!sym.byteCode.empty()){
             std::string str;
-            for(char code: sym.byteCode){
+            for(uint8_t code: sym.byteCode){
                 char tmp[8] = {0};
-                snprintf(tmp, 8, "%x", code);
+                snprintf(tmp, 8, "%02X", code);
                 str += tmp;
                 str += " ";
             }

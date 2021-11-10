@@ -37,7 +37,7 @@ std::shared_ptr<FunctionSymbol>  FUN_println = std::make_shared<FunctionSymbol>(
 std::vector<std::shared_ptr<Type>> FUN_tick_parms;
 std::shared_ptr<Type> FUN_tick_type = std::make_shared<FunctionType>(SysTypes::Void(), FUN_tick_parms);
 
-std::shared_ptr<FunctionSymbol>  FUN_tick = std::make_shared<FunctionSymbol>("println", FUN_tick_type);
+std::shared_ptr<FunctionSymbol>  FUN_tick = std::make_shared<FunctionSymbol>("tick", FUN_tick_type);
 
 ////////////////////////////
 std::vector<std::shared_ptr<Type>> FUN_integer_to_string_parms{SysTypes::Integer()};

@@ -315,11 +315,29 @@ public:
 
 };
 
+/////////////////////////////////////////////////////////////////////////
+// 自动添加return语句，以及其他导致AST改变的操作
+// todo 后面用数据流分析的方法
+
+class Trans: public SemanticAstVisitor{
+public:
+    std::any visitProg(Prog& prog, std::string prefix) override {
+        //在后面添加return语句
+        //TODO: 需要判断最后一个语句是不是已经是Return语句
+        std::shared_ptr<AstNode> exp;
+        auto returnStmt = std::make_shared<ReturnStatement>(prog.endPos, prog.endPos, exp);
+        prog.stmts.push_back(returnStmt);
+
+        return std::any();
+    }
+};
+
 class SemanticAnalyer {
 public:
     std::vector<std::shared_ptr<SemanticAstVisitor>> passes = {
         std::make_shared<Enter>(),
         std::make_shared<RefResolver>(),
+        std::make_shared<Trans>(),
     };
 
     std::vector<std::shared_ptr<CompilerError>> errors;   //语义错误
@@ -333,5 +351,7 @@ public:
         }
     }
 };
+
+
 
 #endif
