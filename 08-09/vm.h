@@ -74,6 +74,8 @@ enum OpCode{
     sldc     = 0x13,    //把字符串常量入栈。字符串放在常量区，用两个操作数记录下标。
 };
 
+std::string toString(OpCode op);
+
 class BCModule{
 public:
     //常量
@@ -168,7 +170,7 @@ public:
                 auto vec = this->anyToCode(code);
                 this->addOffsetToJumpOp(vec, vec.size());
                 ret.insert(ret.end(), vec.begin(), vec.end());
-                dbg("=====================ret size:" + std::to_string(ret.size()));
+                //dbg("=====================ret size:" + std::to_string(ret.size()));
             }
         }
         return ret;
@@ -599,9 +601,10 @@ struct VMStackFrame{
 
 class VM{
 public:
-    std::vector<VMStackFrame> callStack;
+    std::vector<std::shared_ptr<VMStackFrame>> callStack;
 
     VM(){
+
     }
 
     /**
@@ -609,6 +612,399 @@ public:
      * @param bcModule
      */
     int32_t execute(const BCModule& bcModule){
+
+        //找到入口函数
+        std::shared_ptr<FunctionSymbol> functionSym;
+        if (bcModule._main == nullptr){
+            dbg("Can not find main function.");
+            return -1;
+        }
+        else{
+            functionSym = bcModule._main;
+        }
+
+        //创建栈桢
+        auto frame = std::make_shared<VMStackFrame>(functionSym);
+        this->callStack.push_back(frame);
+
+        //当前运行的代码
+        std::vector<uint8_t> code;
+        if (!functionSym->byteCode.empty()){
+            code = functionSym->byteCode;
+        }
+        else{
+            dbg("Can not find code for "+ frame->funtionSym->name);
+            return -1;
+        }
+
+        //当前代码的位置
+        uint32_t codeIndex = 0;
+
+        //一直执行代码，直到遇到return语句
+        uint8_t opCode = code[codeIndex];
+
+        //临时变量
+        uint8_t byte1 = 0;
+        uint8_t byte2 = 0;
+        std::any vleft;
+        std::any vright;
+
+        std::any anyTmp;
+        uint32_t constIndex = 0;
+        uint8_t numValue = 0;
+        std::string strValue;
+
+        while(true){
+            switch (opCode){
+                case OpCode::iconst_0:
+                    frame->oprandStack.push_back(static_cast<uint8_t>(0));
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iconst_1:
+                    frame->oprandStack.push_back(static_cast<uint8_t>(1));
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iconst_2:
+                    frame->oprandStack.push_back(static_cast<uint8_t>(2));
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iconst_3:
+                    frame->oprandStack.push_back(static_cast<uint8_t>(3));
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iconst_4:
+                    frame->oprandStack.push_back(static_cast<uint8_t>(4));
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iconst_5:
+                    frame->oprandStack.push_back(static_cast<uint8_t>(5));
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::bipush:  //取出1个字节
+                    frame->oprandStack.push_back(code[++codeIndex]);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::sipush:  //取出2个字节
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    frame->oprandStack.push_back(byte1<<8|byte2);
+                    opCode = code[++codeIndex];
+                    break;
+
+                case OpCode::ldc:   //从常量池加载
+                    constIndex = code[++codeIndex];
+                    anyTmp = bcModule.consts[constIndex];
+
+                    if (!isType<int32_t>(anyTmp)) {
+                        dbg("Error: ldc value type not int32 at: " + std::to_string(codeIndex - 1));
+                        return -2;
+                    }
+                    numValue = std::any_cast<int32_t>(anyTmp);
+                    frame->oprandStack.push_back(numValue);
+                    opCode = code[++codeIndex];
+                    break;
+
+
+                case OpCode::sldc:   //从常量池加载字符串
+                    constIndex = code[++codeIndex];
+                    anyTmp = bcModule.consts[constIndex];
+                    if (!isType<std::string>(anyTmp)) {
+                        dbg("Error: sldc value type not string at: " + std::to_string(codeIndex - 1));
+                        return -2;
+                    }
+                    strValue = std::any_cast<std::string>(anyTmp);
+                    frame->oprandStack.push_back(strValue);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iload:
+                    frame->oprandStack.push_back(frame->localVars[code[++codeIndex]]);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iload_0:
+                    frame->oprandStack.push_back(frame->localVars[0]);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iload_1:
+                    frame->oprandStack.push_back(frame->localVars[1]);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iload_2:
+                    frame->oprandStack.push_back(frame->localVars[2]);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iload_3:
+                    frame->oprandStack.push_back(frame->localVars[3]);
+                    opCode = code[++codeIndex];
+                    break;
+
+                case OpCode::istore:
+                    anyTmp = frame->oprandStack.back();
+                    frame->oprandStack.pop_back();
+                    if (!isType<uint8_t>(anyTmp)) {
+                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                        return -2;
+                    }
+                    byte1 = std::any_cast<uint8_t>(anyTmp);
+                    frame->localVars[code[++codeIndex]] = byte1;
+                    opCode = code[++codeIndex];
+                    break;
+
+                case OpCode::istore_0:
+                    anyTmp = frame->oprandStack.back();
+                    frame->oprandStack.pop_back();
+                    if (!isType<uint8_t>(anyTmp)) {
+                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                        return -2;
+                    }
+                    byte1 = std::any_cast<uint8_t>(anyTmp);
+
+                    frame->localVars[0] = byte1;
+                    opCode = code[++codeIndex];
+                    break;
+
+                case OpCode::istore_1:
+                    anyTmp = frame->oprandStack.back();
+                    frame->oprandStack.pop_back();
+                    if (!isType<uint8_t>(anyTmp)) {
+                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                        return -2;
+                    }
+                    byte1 = std::any_cast<uint8_t>(anyTmp);
+
+                    frame->localVars[1] = byte1;
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::istore_2:
+                    anyTmp = frame->oprandStack.back();
+                    frame->oprandStack.pop_back();
+                    if (!isType<uint8_t>(anyTmp)) {
+                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                        return -2;
+                    }
+                    byte1 = std::any_cast<uint8_t>(anyTmp);
+
+                    frame->localVars[2] = byte1;
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::istore_3:
+                    anyTmp = frame->oprandStack.back();
+                    frame->oprandStack.pop_back();
+                    if (!isType<uint8_t>(anyTmp)) {
+                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                        return -2;
+                    }
+                    byte1 = std::any_cast<uint8_t>(anyTmp);
+
+                    frame->localVars[3] = byte1;
+                    opCode = code[++codeIndex];
+                    break;
+/*
+                case OpCode::iadd:
+                case OpCode::sadd:
+                    vright = frame->oprandStack.pop();
+                    vleft = frame->oprandStack.pop();
+                    frame->oprandStack.push_back(vleft + vright);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::isub:
+                    vright = frame->oprandStack.pop();
+                    vleft = frame->oprandStack.pop();
+                    frame->oprandStack.push_back(vleft - vright);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::imul:
+                    frame->oprandStack.push_back(frame->oprandStack.pop() * frame->oprandStack.pop());
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::idiv:
+                    vright = frame->oprandStack.pop();
+                    vleft = frame->oprandStack.pop();
+                    frame->oprandStack.push_back(vleft / vright);
+                    opCode = code[++codeIndex];
+                    break;
+                case OpCode::iinc:
+                    auto varIndex = code[++codeIndex];
+                    auto offset = code[++codeIndex];
+                    frame->localVars[varIndex] = frame->localVars[varIndex]+offset;
+                    opCode = code[++codeIndex];
+                    break;
+
+                case OpCode::ireturn:
+                case OpCode::return:
+                    //确定返回值
+                    auto retValue = undefined;
+                    if(opCode == OpCode::ireturn){
+                        retValue = frame->oprandStack.pop();
+                    }
+
+                    //弹出栈桢，返回到上一级函数，继续执行
+                    this->callStack.pop();
+                    if (this->callStack.length == 0){ //主程序返回，结束运行
+                        return 0;
+                    }
+                    else { //返回到上一级调用者
+                        frame = this->callStack[this->callStack.length-1];
+                        //设置返回值到上一级栈桢
+                        // frame.retValue = retValue;
+                        if(opCode == OpCode::ireturn){
+                            frame->oprandStack.push_back(retValue);
+                        }
+                        //设置新的code、codeIndex和oPCode
+                        if (frame.funtionSym.byteCode !=null){
+                            //切换到调用者的代码
+                            code = frame.funtionSym.byteCode;
+                            //设置指令指针为返回地址，也就是调用该函数的下一条指令
+                            codeIndex = frame.returnIndex;
+                            opCode = code[codeIndex];
+                            break;
+                        }
+                        else{
+                            console.log("Can not find code for "+ frame.funtionSym.name);
+                            return -1;
+                        }
+                    }
+                    break;
+                case OpCode::invokestatic:
+                    //从常量池找到被调用的函数
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    auto functionSym = bcModule.consts[byte1<<8|byte2] as FunctionSymbol;
+
+                    //对于内置函数特殊处理
+                    if(functionSym.name == 'println'){
+                        //取出一个参数
+                        auto param = frame->oprandStack.pop();
+                        opCode = code[++codeIndex];
+                        console.log(param);   //打印显示
+                    }
+                    else if(functionSym.name == 'tick'){
+                        opCode = code[++codeIndex];
+                        auto date = new Date();
+                        auto value = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+                        frame->oprandStack.push_back(value);
+                    }
+                    else if(functionSym.name == 'integer_to_string'){
+                        opCode = code[++codeIndex];
+                        numValue = frame->oprandStack.pop();
+                        frame->oprandStack.push_back(numValue.toString());
+                    }
+                    else{
+                        //设置返回值地址，为函数调用的下一条指令
+                        frame.returnIndex = codeIndex + 1;
+
+                        //创建新的栈桢
+                        auto lastFrame = frame;
+                        frame = new StackFrame(functionSym);
+                        this->callStack.push_back(frame);
+
+                        //传递参数
+                        auto paramCount = (functionSym.theType as FunctionType).paramTypes.length;
+                        for(auto i = paramCount -1; i>= 0; i--){
+                            frame->localVars[i] = lastFrame.oprandStack.pop();
+                        }
+
+                        //设置新的code、codeIndex和oPCode
+                        if (frame.funtionSym.byteCode !=null){
+                            //切换到被调用函数的代码
+                            code = frame.funtionSym.byteCode;
+                            //代码指针归零
+                            codeIndex = 0;
+                            opCode = code[codeIndex];
+                            break;
+                        }
+                        else{
+                            console.log("Can not find code for "+ frame.funtionSym.name);
+                            return -1;
+                        }
+                    }
+                    break;
+                case OpCode::ifeq:
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    if(frame->oprandStack.pop() == 0){
+                        codeIndex = byte1<<8|byte2;
+                        opCode = code[codeIndex];
+                    }
+                    else{
+                        opCode = code[++codeIndex];
+                    }
+                    break;
+                case OpCode::ifne:
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    if(frame->oprandStack.pop() != 0){
+                        codeIndex = byte1<<8|byte2;
+                        opCode = code[codeIndex];
+                    }
+                    else{
+                        opCode = code[++codeIndex];
+                    }
+                    break;
+                case OpCode::if_icmplt:
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    vright = frame->oprandStack.pop();
+                    vleft = frame->oprandStack.pop();
+                    if(vleft < vright){
+                        codeIndex = byte1<<8|byte2;
+                        opCode = code[codeIndex];
+                    }
+                    else{
+                        opCode = code[++codeIndex];
+                    }
+                    break;
+                case OpCode::if_icmpge:
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    vright = frame->oprandStack.pop();
+                    vleft = frame->oprandStack.pop();
+                    if(vleft >= vright){
+                        codeIndex = byte1<<8|byte2;
+                        opCode = code[codeIndex];
+                    }
+                    else{
+                        opCode = code[++codeIndex];
+                    }
+                    break;
+                case OpCode::if_icmpgt:
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    vright = frame->oprandStack.pop();
+                    vleft = frame->oprandStack.pop();
+                    if(vleft > vright){
+                        codeIndex = byte1<<8|byte2;
+                        opCode = code[codeIndex];
+                    }
+                    else{
+                        opCode = code[++codeIndex];
+                    }
+                    break;
+                case OpCode::if_icmple:
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    vright = frame->oprandStack.pop();
+                    vleft = frame->oprandStack.pop();
+                    if(vleft <= vright){
+                        codeIndex = byte1<<8|byte2;
+                        opCode = code[codeIndex];
+                    }
+                    else{
+                        opCode = code[++codeIndex];
+                    }
+                    break;
+                case OpCode::goto:
+                    byte1 = code[++codeIndex];
+                    byte2 = code[++codeIndex];
+                    codeIndex = byte1<<8|byte2;
+                    opCode = code[codeIndex];
+                    break;
+*/
+                default:
+                    dbg("Unknown or Unsupported op code: "+ toString(static_cast<OpCode>(opCode)));
+                    return -2;
+            }
+        }
+
         return 0;
     }
 
