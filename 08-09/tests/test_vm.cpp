@@ -51,6 +51,8 @@ let i = 1;
     auto bc = std::any_cast<std::shared_ptr<BCModule>>(bcModule);
     bcModuleDumper.dump(*bc);
 
+    auto vm = VM();
+    vm.execute(*bc);
 }
 
 TEST(Vm, vm_VariableDecl_functionCall)
@@ -60,6 +62,9 @@ R"(Prog
     VariableStatement
         VariableDecl i(any)
             1(integer)
+    ExpressionStatement
+        FunctionCall println, built-in
+            Variable: i, resolved
     ReturnStatement
 )";
 
