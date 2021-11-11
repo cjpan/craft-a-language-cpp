@@ -128,7 +128,7 @@ public:
             std::string str;
             for(uint8_t code: sym.byteCode){
                 char tmp[8] = {0};
-                snprintf(tmp, 8, "%02X", code);
+                snprintf(tmp, 8, "%02x", code);
                 str += tmp;
                 str += " ";
             }

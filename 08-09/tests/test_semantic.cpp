@@ -16,6 +16,7 @@ R"(Prog
     ExpressionStatement
         FunctionCall println, built-in
             Variable: i, resolved
+    ReturnStatement
 )";
 
     std::string program = R"(
@@ -63,6 +64,7 @@ R"(Prog
         FunctionCall println, built-in
             FunctionCall fourTimes, resolved
                 4(integer)
+    ReturnStatement
 )";
 
     std::string program =

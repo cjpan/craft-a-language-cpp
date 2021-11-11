@@ -14,6 +14,7 @@ R"(Prog
     VariableStatement
         VariableDecl i(any)
             1(integer)
+    ReturnStatement
 )";
 
     std::string program = R"(
