@@ -687,7 +687,7 @@ public:
                 case OpCode::sipush:  //取出2个字节
                     byte1 = code[++codeIndex];
                     byte2 = code[++codeIndex];
-                    frame->oprandStack.push_back(byte1<<8|byte2);
+                    frame->oprandStack.push_back((byte1<<8)|byte2);
                     opCode = code[++codeIndex];
                     break;
 
@@ -828,96 +828,128 @@ public:
                     frame->localVars[varIndex] = frame->localVars[varIndex]+offset;
                     opCode = code[++codeIndex];
                     break;
+*/
 
                 case OpCode::ireturn:
-                case OpCode::return:
+                case OpCode::vreturn:
+                {
                     //确定返回值
-                    auto retValue = undefined;
+                    std::any retValue;
                     if(opCode == OpCode::ireturn){
-                        retValue = frame->oprandStack.pop();
+                        retValue = frame->oprandStack.back();
+                        frame->oprandStack.pop_back();
                     }
 
                     //弹出栈桢，返回到上一级函数，继续执行
-                    this->callStack.pop();
-                    if (this->callStack.length == 0){ //主程序返回，结束运行
+                    this->callStack.pop_back();
+                    if (this->callStack.empty()){ //主程序返回，结束运行
                         return 0;
                     }
                     else { //返回到上一级调用者
-                        frame = this->callStack[this->callStack.length-1];
+                        frame = this->callStack.back();
                         //设置返回值到上一级栈桢
                         // frame.retValue = retValue;
                         if(opCode == OpCode::ireturn){
                             frame->oprandStack.push_back(retValue);
                         }
                         //设置新的code、codeIndex和oPCode
-                        if (frame.funtionSym.byteCode !=null){
+                        if (!frame->funtionSym->byteCode.empty()){
                             //切换到调用者的代码
-                            code = frame.funtionSym.byteCode;
+                            code = frame->funtionSym->byteCode;
                             //设置指令指针为返回地址，也就是调用该函数的下一条指令
-                            codeIndex = frame.returnIndex;
+                            codeIndex = frame->returnIndex;
                             opCode = code[codeIndex];
                             break;
                         }
                         else{
-                            console.log("Can not find code for "+ frame.funtionSym.name);
+                            dbg("Can not find code for " + frame->funtionSym->name);
                             return -1;
                         }
                     }
                     break;
+                }
+
                 case OpCode::invokestatic:
+                {
                     //从常量池找到被调用的函数
                     byte1 = code[++codeIndex];
                     byte2 = code[++codeIndex];
-                    auto functionSym = bcModule.consts[byte1<<8|byte2] as FunctionSymbol;
+                    auto sym = bcModule.consts[byte1<<8|byte2];
+                    if (!isType<std::shared_ptr<FunctionSymbol>>(sym)) {
+                        dbg("Error: invokestatic expect is std::shared_ptr<FunctionSymbol>, index: " + std::to_string(byte1<<8|byte2));
+                        return -2;
+                    }
+
+                    functionSym = std::any_cast<std::shared_ptr<FunctionSymbol>>(sym);
 
                     //对于内置函数特殊处理
-                    if(functionSym.name == 'println'){
+                    if(functionSym->name == "println"){
+                        dbg("VM call println");
                         //取出一个参数
-                        auto param = frame->oprandStack.pop();
+                        auto param = frame->oprandStack.back();
+                        frame->oprandStack.pop_back();
                         opCode = code[++codeIndex];
-                        console.log(param);   //打印显示
+                        PrintAny(param);   //打印显示
                     }
-                    else if(functionSym.name == 'tick'){
+                    else if(functionSym->name == "tick"){
                         opCode = code[++codeIndex];
-                        auto date = new Date();
-                        auto value = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+                        // TODO add some time
+                        int32_t value = 1024;
                         frame->oprandStack.push_back(value);
                     }
-                    else if(functionSym.name == 'integer_to_string'){
+                    else if(functionSym->name == "integer_to_string"){
                         opCode = code[++codeIndex];
-                        numValue = frame->oprandStack.pop();
-                        frame->oprandStack.push_back(numValue.toString());
+                        anyTmp =frame->oprandStack.back();
+                        frame->oprandStack.pop_back();
+
+                        if (!isType<int32_t>(anyTmp)) {
+                            dbg("Error: invokestatic integer_to_string expect int32_t, but: " + std::string(anyTmp.type().name()));
+                        }
+
+                        numValue = std::any_cast<int32_t>(anyTmp);
+
+                        frame->oprandStack.push_back(std::to_string(numValue));
                     }
                     else{
                         //设置返回值地址，为函数调用的下一条指令
-                        frame.returnIndex = codeIndex + 1;
+                        frame->returnIndex = codeIndex + 1;
 
                         //创建新的栈桢
                         auto lastFrame = frame;
-                        frame = new StackFrame(functionSym);
+                        frame = std::make_shared<VMStackFrame>(functionSym);
                         this->callStack.push_back(frame);
 
                         //传递参数
-                        auto paramCount = (functionSym.theType as FunctionType).paramTypes.length;
-                        for(auto i = paramCount -1; i>= 0; i--){
-                            frame->localVars[i] = lastFrame.oprandStack.pop();
+                        auto paramCount = functionSym->getNumParams();
+                        for(int32_t i = paramCount -1; i>= 0; i--){
+                            auto tmp = lastFrame->oprandStack.back();
+                            lastFrame->oprandStack.pop_back();
+
+                            if (!isType<uint8_t>(tmp)) {
+                                dbg("Error: invokestatic param expect uint8_t, but: " + std::string(tmp.type().name()));
+                            }
+
+                            frame->localVars[i] = std::any_cast<uint8_t>(tmp);
                         }
 
                         //设置新的code、codeIndex和oPCode
-                        if (frame.funtionSym.byteCode !=null){
+                        if (!frame->funtionSym->byteCode.empty()){
                             //切换到被调用函数的代码
-                            code = frame.funtionSym.byteCode;
+                            code = frame->funtionSym->byteCode;
                             //代码指针归零
                             codeIndex = 0;
                             opCode = code[codeIndex];
                             break;
                         }
                         else{
-                            console.log("Can not find code for "+ frame.funtionSym.name);
+                            dbg("Can not find code for "+ frame->funtionSym->name);
                             return -1;
                         }
                     }
                     break;
+                }
+
+/*
                 case OpCode::ifeq:
                     byte1 = code[++codeIndex];
                     byte2 = code[++codeIndex];

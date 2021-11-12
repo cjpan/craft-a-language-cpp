@@ -2,6 +2,7 @@
 #include "interpretor.h"
 #include "semantic.h"
 #include "parser.h"
+#include "common.h"
 
 #include "dbg.h"
 
@@ -52,7 +53,8 @@ let i = 1;
     bcModuleDumper.dump(*bc);
 
     auto vm = VM();
-    vm.execute(*bc);
+    auto ret = vm.execute(*bc);
+    Print("vm.execute ret: " + std::to_string(ret), Color::Yellow);
 }
 
 TEST(Vm, vm_VariableDecl_functionCall)
@@ -103,4 +105,7 @@ println(i);
     auto bc = std::any_cast<std::shared_ptr<BCModule>>(bcModule);
     bcModuleDumper.dump(*bc);
 
+    auto vm = VM();
+    auto ret = vm.execute(*bc);
+    Print("vm.execute ret: " + std::to_string(ret), Color::Yellow);
 }

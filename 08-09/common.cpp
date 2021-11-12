@@ -46,6 +46,9 @@ static std::unordered_map<
     std::type_index, std::function<void(std::any const&)>>
 any_visitor {
     to_any_visitor<void>([]{ Print("{}"); }),
+    to_any_visitor<int8_t>([](int8_t x){ Print(std::to_string(x)); }),
+    to_any_visitor<uint8_t>([](uint8_t x){ Print(std::to_string(x)); }),
+    to_any_visitor<int16_t>([](int16_t x){ Print(std::to_string(x)); }),
     to_any_visitor<int32_t>([](int32_t x){ Print(std::to_string(x)); }),
     to_any_visitor<uint32_t>([](uint32_t x){ Print(std::to_string(x)); }),
     to_any_visitor<float>([](float x){ Print(std::to_string(x)); }),
@@ -55,8 +58,8 @@ any_visitor {
 };
 
 void PrintAny(const std::any& a) {
-    if (const auto it = any_visitor.find(std::type_index(a.type()));
-        it != any_visitor.cend()) {
+    auto it = any_visitor.find(std::type_index(a.type()));
+    if (it != any_visitor.end()) {
         it->second(a);
     } else {
         dbg("Unregistered type " + std::string(a.type().name()));
