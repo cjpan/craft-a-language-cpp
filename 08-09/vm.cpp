@@ -58,3 +58,69 @@ std::string toString(OpCode op) {
 
     return iter->second;
 }
+
+std::map<OpCode,
+        std::map<std::type_index,
+            std::map<std::type_index,
+                VM::BinaryFunction>>> VM::binaryOp = {
+
+    //{OpCode::Plus, { std::type_index(typeid(int32_t)), {std::type_index(typeid(int32_t)), PlusIntInt} } };
+
+};
+
+std::once_flag VM::flag;
+
+template<typename T1, typename T2>
+inline void InsertBinaryOpFunc(OpCode op, const VM::BinaryFunction& func) {
+    //VM::binaryOp.insert(op, {});
+    auto& inner = VM::binaryOp[op];
+    auto& innerLeft = inner[std::type_index(typeid(T1))];
+    innerLeft[std::type_index(typeid(T2))] = func;
+}
+
+void VM::InitBinaryFunction() {
+    InsertBinaryOpFunc<int32_t, int32_t>(OpCode::iadd, PlusIntInt<int32_t, int32_t>); //'+'
+    InsertBinaryOpFunc<int8_t, int32_t>(OpCode::iadd, PlusIntInt<int8_t, int32_t>); //'+'
+    InsertBinaryOpFunc<int32_t, int8_t>(OpCode::iadd, PlusIntInt<int32_t, int8_t>); //'+'
+    InsertBinaryOpFunc<int8_t, int8_t>(OpCode::iadd, PlusIntInt<int8_t, int8_t>); //'+'
+
+    InsertBinaryOpFunc<int32_t, int32_t>(OpCode::isub, MinusIntInt<int32_t, int32_t>); //'-'
+    InsertBinaryOpFunc<int8_t, int32_t>(OpCode::isub, MinusIntInt<int8_t, int32_t>); //'-'
+    InsertBinaryOpFunc<int32_t, int8_t>(OpCode::isub, MinusIntInt<int32_t, int8_t>); //'-'
+    InsertBinaryOpFunc<int8_t, int8_t>(OpCode::isub, MinusIntInt<int8_t, int8_t>); //'-'
+
+    InsertBinaryOpFunc<int32_t, int32_t>(OpCode::imul, MultiplyIntInt<int32_t, int32_t>); //'*'
+    InsertBinaryOpFunc<int8_t, int32_t>(OpCode::imul, MultiplyIntInt<int8_t, int32_t>); //'*'
+    InsertBinaryOpFunc<int32_t, int8_t>(OpCode::imul, MultiplyIntInt<int32_t, int8_t>); //'*'
+    InsertBinaryOpFunc<int8_t, int8_t>(OpCode::imul, MultiplyIntInt<int8_t, int8_t>); //'*'
+
+    InsertBinaryOpFunc<int32_t, int32_t>(OpCode::idiv, DivideIntInt<int32_t, int32_t>); //'/'
+    InsertBinaryOpFunc<int8_t, int32_t>(OpCode::idiv, DivideIntInt<int8_t, int32_t>); //'/'
+    InsertBinaryOpFunc<int32_t, int8_t>(OpCode::idiv, DivideIntInt<int32_t, int8_t>); //'/'
+    InsertBinaryOpFunc<int8_t, int8_t>(OpCode::idiv, DivideIntInt<int8_t, int8_t>); //'/'
+}
+
+std::optional<VM::BinaryFunction> VM::GetBinaryFunction(OpCode op, const std::any& l, const std::any& r) {
+    auto type1 = std::type_index(l.type());
+    auto type2 = std::type_index(r.type());
+
+    auto it = VM::binaryOp.find(op);
+    if (it == VM::binaryOp.end()) {
+        dbg("Unsupported binary, OpCode: " + toString(op));
+        return std::nullopt;
+    }
+
+    auto itLeft = it->second.find(type1);
+    if (itLeft == it->second.end()) {
+        dbg("Unsupported binary, leftType: " + std::string(l.type().name()));
+        return std::nullopt;
+    }
+
+    auto itRight = itLeft->second.find(type2);
+    if (itRight == itLeft->second.end()) {
+        dbg("Unsupported binary, rightType: " + std::string(r.type().name()));
+        return std::nullopt;
+    }
+
+    return itRight->second;
+}

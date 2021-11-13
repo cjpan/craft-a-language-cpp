@@ -364,7 +364,7 @@ public:
             //加入运算符的代码
             switch(bi.op){
                 case Op::Plus: //'+'
-                    if (*bi.theType == *SysTypes::String()){
+                    if (bi.theType != nullptr && *bi.theType == *SysTypes::String()){
                         code.push_back(OpCode::sadd);
                     }
                     else{
@@ -589,7 +589,7 @@ struct VMStackFrame{
     uint32_t returnIndex = 0;
 
     //本地变量
-    std::vector<uint8_t> localVars;
+    std::vector<int32_t> localVars;
 
     //操作数栈
     std::vector<std::any> oprandStack;
@@ -604,8 +604,20 @@ public:
     std::vector<std::shared_ptr<VMStackFrame>> callStack;
 
     VM(){
-
+        std::call_once(flag, [](){
+            dbg("VM::InitBinaryFunction: called once");
+            InitBinaryFunction();
+        });
     }
+
+    using BinaryFunction = std::function<std::any(const std::any&, const std::any&)>;
+    static std::map<OpCode,
+                    std::map<std::type_index,
+                        std::map<std::type_index,
+                            BinaryFunction>>> binaryOp;
+    static void InitBinaryFunction();
+    static std::optional<BinaryFunction> GetBinaryFunction(OpCode op, const std::any& l, const std::any& r);
+    static std::once_flag flag;
 
     /**
      * 运行一个模块。
@@ -649,6 +661,8 @@ public:
         std::any vleft;
         std::any vright;
 
+        int32_t tmpLocal = 0;
+
         std::any anyTmp;
         uint32_t constIndex = 0;
         int32_t numValue = 0;
@@ -681,7 +695,7 @@ public:
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::bipush:  //取出1个字节
-                    frame->oprandStack.push_back(code[++codeIndex]);
+                    frame->oprandStack.push_back(static_cast<int8_t>(code[++codeIndex]));
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::sipush:  //取出2个字节
@@ -740,88 +754,93 @@ public:
                 case OpCode::istore:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<int8_t>(anyTmp)) {
-                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int32_t>(anyTmp)) {
+                        dbg("Error: istore value type not int32_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<int8_t>(anyTmp);
-                    frame->localVars[code[++codeIndex]] = byte1;
+                    tmpLocal = std::any_cast<int32_t>(anyTmp);
+                    frame->localVars[code[++codeIndex]] = tmpLocal;
                     opCode = code[++codeIndex];
                     break;
 
                 case OpCode::istore_0:
+                {
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<int8_t>(anyTmp)) {
-                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
+                    if (isType<int32_t>(anyTmp)) {
+                        tmpLocal = std::any_cast<int32_t>(anyTmp);
+                    } else if (isType<int8_t>(anyTmp)) {
+                        tmpLocal = std::any_cast<int8_t>(anyTmp);
+                    } else {
+                        dbg("Error: istore value type not int32_t/int8_t at: " + std::string(anyTmp.type().name()));
                         return -2;
                     }
-                    byte1 = std::any_cast<int8_t>(anyTmp);
 
-                    frame->localVars[0] = byte1;
+                    frame->localVars[0] = tmpLocal;
                     opCode = code[++codeIndex];
                     break;
-
+                }
                 case OpCode::istore_1:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<int8_t>(anyTmp)) {
-                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int32_t>(anyTmp)) {
+                        dbg("Error: istore value type not int32_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<int8_t>(anyTmp);
+                    tmpLocal = std::any_cast<int32_t>(anyTmp);
 
-                    frame->localVars[1] = byte1;
+                    frame->localVars[1] = tmpLocal;
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::istore_2:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<int8_t>(anyTmp)) {
-                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int32_t>(anyTmp)) {
+                        dbg("Error: istore value type not int32_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<int8_t>(anyTmp);
+                    tmpLocal = std::any_cast<int32_t>(anyTmp);
 
-                    frame->localVars[2] = byte1;
+                    frame->localVars[2] = tmpLocal;
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::istore_3:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<int8_t>(anyTmp)) {
-                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int32_t>(anyTmp)) {
+                        dbg("Error: istore value type not int32_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<int8_t>(anyTmp);
+                    tmpLocal = std::any_cast<int32_t>(anyTmp);
 
-                    frame->localVars[3] = byte1;
+                    frame->localVars[3] = tmpLocal;
                     opCode = code[++codeIndex];
                     break;
-/*
+
                 case OpCode::iadd:
-                case OpCode::sadd:
-                    vright = frame->oprandStack.pop();
-                    vleft = frame->oprandStack.pop();
-                    frame->oprandStack.push_back(vleft + vright);
-                    opCode = code[++codeIndex];
-                    break;
                 case OpCode::isub:
-                    vright = frame->oprandStack.pop();
-                    vleft = frame->oprandStack.pop();
-                    frame->oprandStack.push_back(vleft - vright);
-                    opCode = code[++codeIndex];
-                    break;
                 case OpCode::imul:
-                    frame->oprandStack.push_back(frame->oprandStack.pop() * frame->oprandStack.pop());
-                    opCode = code[++codeIndex];
-                    break;
                 case OpCode::idiv:
-                    vright = frame->oprandStack.pop();
-                    vleft = frame->oprandStack.pop();
-                    frame->oprandStack.push_back(vleft / vright);
+                {
+                    vright = frame->oprandStack.back();
+                    frame->oprandStack.pop_back();
+                    vleft = frame->oprandStack.back();
+                    frame->oprandStack.pop_back();
+
+                    auto func = VM::GetBinaryFunction(static_cast<OpCode>(opCode), vleft, vright);
+                    if (!func) {
+                        dbg("Unsupported binary operation: " + toString(static_cast<OpCode>(opCode)));
+                        return -2;
+                    }
+
+                    auto ret = func.value()(vleft, vright);
+                    frame->oprandStack.push_back(ret);
                     opCode = code[++codeIndex];
                     break;
+                }
+
+/*
+                case OpCode::sadd:
                 case OpCode::iinc:
                     auto varIndex = code[++codeIndex];
                     auto offset = code[++codeIndex];
