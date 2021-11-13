@@ -63,7 +63,7 @@ TEST(Vm, vm_VariableDecl_functionCall)
 R"(Prog
     VariableStatement
         VariableDecl i(any)
-            1(integer)
+            100(integer)
     ExpressionStatement
         FunctionCall println, built-in
             Variable: i, resolved
@@ -71,7 +71,7 @@ R"(Prog
 )";
 
     std::string program = R"(
-let i = 1;
+let i = 100;
 println(i);
 )";
     CharStream charStream(program);

@@ -560,11 +560,11 @@ public:
                 case OpCode::iflt:
                 case OpCode::igoto:
                 {
-                    uint8_t byte1 = code[codeIndex+1];
-                    uint8_t byte2 = code[codeIndex+2];
-                    uint8_t address = (byte1<<8|byte2) + offset;
-                    code[codeIndex+1] = address>>8;
-                    code[codeIndex+2] = address;
+                    int8_t byte1 = code[codeIndex+1];
+                    int8_t byte2 = code[codeIndex+2];
+                    int16_t address = (byte1<<8|byte2) + offset;
+                    code[codeIndex+1] = static_cast<int8_t>(address>>8);
+                    code[codeIndex+2] = static_cast<int8_t>(address);
                     codeIndex += 3;
                     break;
                 }
@@ -644,40 +644,40 @@ public:
         uint8_t opCode = code[codeIndex];
 
         //临时变量
-        uint8_t byte1 = 0;
-        uint8_t byte2 = 0;
+        int8_t byte1 = 0;
+        int8_t byte2 = 0;
         std::any vleft;
         std::any vright;
 
         std::any anyTmp;
         uint32_t constIndex = 0;
-        uint8_t numValue = 0;
+        int32_t numValue = 0;
         std::string strValue;
 
         while(true){
             switch (opCode){
                 case OpCode::iconst_0:
-                    frame->oprandStack.push_back(static_cast<uint8_t>(0));
+                    frame->oprandStack.push_back(static_cast<int8_t>(0));
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::iconst_1:
-                    frame->oprandStack.push_back(static_cast<uint8_t>(1));
+                    frame->oprandStack.push_back(static_cast<int8_t>(1));
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::iconst_2:
-                    frame->oprandStack.push_back(static_cast<uint8_t>(2));
+                    frame->oprandStack.push_back(static_cast<int8_t>(2));
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::iconst_3:
-                    frame->oprandStack.push_back(static_cast<uint8_t>(3));
+                    frame->oprandStack.push_back(static_cast<int8_t>(3));
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::iconst_4:
-                    frame->oprandStack.push_back(static_cast<uint8_t>(4));
+                    frame->oprandStack.push_back(static_cast<int8_t>(4));
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::iconst_5:
-                    frame->oprandStack.push_back(static_cast<uint8_t>(5));
+                    frame->oprandStack.push_back(static_cast<int8_t>(5));
                     opCode = code[++codeIndex];
                     break;
                 case OpCode::bipush:  //取出1个字节
@@ -740,11 +740,11 @@ public:
                 case OpCode::istore:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<uint8_t>(anyTmp)) {
-                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int8_t>(anyTmp)) {
+                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<uint8_t>(anyTmp);
+                    byte1 = std::any_cast<int8_t>(anyTmp);
                     frame->localVars[code[++codeIndex]] = byte1;
                     opCode = code[++codeIndex];
                     break;
@@ -752,11 +752,11 @@ public:
                 case OpCode::istore_0:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<uint8_t>(anyTmp)) {
-                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int8_t>(anyTmp)) {
+                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<uint8_t>(anyTmp);
+                    byte1 = std::any_cast<int8_t>(anyTmp);
 
                     frame->localVars[0] = byte1;
                     opCode = code[++codeIndex];
@@ -765,11 +765,11 @@ public:
                 case OpCode::istore_1:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<uint8_t>(anyTmp)) {
-                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int8_t>(anyTmp)) {
+                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<uint8_t>(anyTmp);
+                    byte1 = std::any_cast<int8_t>(anyTmp);
 
                     frame->localVars[1] = byte1;
                     opCode = code[++codeIndex];
@@ -777,11 +777,11 @@ public:
                 case OpCode::istore_2:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<uint8_t>(anyTmp)) {
-                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int8_t>(anyTmp)) {
+                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<uint8_t>(anyTmp);
+                    byte1 = std::any_cast<int8_t>(anyTmp);
 
                     frame->localVars[2] = byte1;
                     opCode = code[++codeIndex];
@@ -789,11 +789,11 @@ public:
                 case OpCode::istore_3:
                     anyTmp = frame->oprandStack.back();
                     frame->oprandStack.pop_back();
-                    if (!isType<uint8_t>(anyTmp)) {
-                        dbg("Error: istore value type not uint8_t at: " + std::to_string(codeIndex - 1));
+                    if (!isType<int8_t>(anyTmp)) {
+                        dbg("Error: istore value type not int8_t at: " + std::to_string(codeIndex - 1));
                         return -2;
                     }
-                    byte1 = std::any_cast<uint8_t>(anyTmp);
+                    byte1 = std::any_cast<int8_t>(anyTmp);
 
                     frame->localVars[3] = byte1;
                     opCode = code[++codeIndex];
@@ -925,11 +925,11 @@ public:
                             auto tmp = lastFrame->oprandStack.back();
                             lastFrame->oprandStack.pop_back();
 
-                            if (!isType<uint8_t>(tmp)) {
-                                dbg("Error: invokestatic param expect uint8_t, but: " + std::string(tmp.type().name()));
+                            if (!isType<int8_t>(tmp)) {
+                                dbg("Error: invokestatic param expect int8_t, but: " + std::string(tmp.type().name()));
                             }
 
-                            frame->localVars[i] = std::any_cast<uint8_t>(tmp);
+                            frame->localVars[i] = std::any_cast<int8_t>(tmp);
                         }
 
                         //设置新的code、codeIndex和oPCode
