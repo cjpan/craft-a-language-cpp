@@ -1061,4 +1061,104 @@ public:
 
 };
 
+class BCModuleWriter {
+public:
+    std::vector<std::shared_ptr<Type>> types; //保存该模块所涉及的类型
+
+    /**
+     * 从bcModule生成字节码
+     * @param bcModule
+     */
+    std::vector<uint8_t> write(const BCModule& bcModule) {
+        std::vector<uint8_t> bc2;
+        this->types.clear();  //重置状态变量
+
+        //写入常量
+
+
+        //写入类型
+
+
+        return {};
+    }
+
+    std::vector<uint8_t> writeVarSymbol(std::shared_ptr<Symbol>& s) {
+        std::vector<uint8_t> bc;
+
+        auto sym = std::dynamic_pointer_cast<VarSymbol>(s);
+
+        //写入变量名称
+        this->writeString(bc, sym->name);
+
+        //写入类型名称
+        this->writeString(bc, sym->theType->name);
+        auto it = find(this->types.begin(), this->types.end(), sym->theType);
+        if (!SysTypes::isSysType(sym->theType) && it == this->types.end()){
+            this->types.push_back(sym->theType);
+        }
+
+        return bc;
+    }
+
+    std::vector<uint8_t> writeFunctionSymbol(std::shared_ptr<Symbol>& sym) {
+        std::vector<uint8_t> bc;
+
+        return bc;
+    }
+
+    std::vector<uint8_t> writeSimpleType(std::shared_ptr<Type>& t) {
+        std::vector<uint8_t> bc;
+        if (SysTypes::isSysType(t)) {
+            return bc;
+        }
+
+        // TODO in future
+
+        return bc;
+    }
+
+    std::vector<uint8_t> writeFunctionType(std::shared_ptr<Type>& type) {
+        std::vector<uint8_t> bc;
+
+        auto t = std::dynamic_pointer_cast<FunctionType>(type);
+        bc.push_back(static_cast<uint8_t>(2)); //代表FunctionType
+
+        //写入类型名称
+        this->writeString(bc, t->name);
+
+        //写入返回值名称
+        this->writeString(bc, t->returnType->name);
+
+        //写入参数数量
+        bc.push_back(static_cast<uint8_t>(t->paramTypes.size()));
+
+        //写入参数的类型名称
+        for (auto pt: t->paramTypes){
+            this->writeString(bc, pt->name);
+            auto it = find(this->types.begin(), this->types.end(), pt);
+            if (it == this->types.end()){
+                this->types.push_back(pt);
+            }
+        }
+
+        return bc;
+    }
+
+
+
+    /**
+     * 把字符串添加的字节码数组中
+     * @param bc
+     * @param str
+     */
+    void writeString(std::vector<uint8_t>& bc, const std::string& str){
+        //写入字符串的长度
+        bc.push_back(static_cast<uint8_t>(str.size()));
+        for (auto c : str){
+            bc.push_back(static_cast<uint8_t>(c));
+        }
+    }
+};
+
+
 #endif
