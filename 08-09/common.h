@@ -4,6 +4,7 @@
 #include <string>
 #include <type_traits>
 #include <any>
+#include <vector>
 
 enum class Color {
     Reset,
@@ -124,6 +125,7 @@ std::any NEIntInt(const std::any& l, const std::any& r) {
 }
 
 std::string Print(const std::string& str, Color color = Color::Red);
+std::string PrintHex(const std::vector<uint8_t>& byteCode, Color color = Color::Red);
 
 void PrintAny(const std::any& a);
 #endif

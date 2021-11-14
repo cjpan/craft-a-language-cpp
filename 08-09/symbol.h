@@ -125,14 +125,7 @@ public:
         Print(additional + sym.name + "{" + SymKindtoString(sym.kind) + ", local var count:"+ std::to_string(sym.vars.size())+ "}");
         //输出字节码
         if (!sym.byteCode.empty()){
-            std::string str;
-            for(uint8_t code: sym.byteCode){
-                char tmp[8] = {0};
-                snprintf(tmp, sizeof(tmp), "%02x", code);
-                str += tmp;
-                str += " ";
-            }
-            Print(additional + "    bytecode: " + str);
+            PrintHex(sym.byteCode);
         }
         return std::any();
     }

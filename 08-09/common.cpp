@@ -65,3 +65,22 @@ void PrintAny(const std::any& a) {
         dbg("Unregistered type " + std::string(a.type().name()));
     }
 }
+
+std::string PrintHex(const std::vector<uint8_t>& byteCode, Color color) {
+    std::string str("[");
+    bool start = true;
+    for(uint8_t code: byteCode){
+        if (start) {
+            start = false;
+        } else {
+            str.push_back(' ');
+        }
+
+        char tmp[8] = {0};
+        snprintf(tmp, sizeof(tmp), "%02x", code);
+        str += tmp;
+    }
+    str.push_back(']');
+
+    return Print(str, color);
+}
