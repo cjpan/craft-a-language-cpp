@@ -1065,6 +1065,20 @@ class BCModuleWriter {
 public:
     std::vector<std::shared_ptr<Type>> types; //保存该模块所涉及的类型
 
+
+    bool CanAddTypes(const std::shared_ptr<Type>& t) {
+
+        if (SysTypes::isSysType(t)){
+            return false;
+        }
+
+        auto it = find(this->types.begin(), this->types.end(), t);
+        if (it != this->types.end()){
+            return false;
+        }
+
+        return true;
+    }
     /**
      * 从bcModule生成字节码
      * @param bcModule
@@ -1073,13 +1087,58 @@ public:
         std::vector<uint8_t> bc2;
         this->types.clear();  //重置状态变量
 
+        dbg(std::string("bcModule.consts size: ") + std::to_string(bcModule.consts.size()));
         //写入常量
-
+        uint8_t numConsts = 0;
+        for(auto& c: bcModule.consts){
+            if (isType<int32_t>(c)){
+                bc2.push_back(1); //代表接下来是一个number；
+                bc2.push_back(std::any_cast<int32_t>(c));
+                numConsts++;
+            }
+            else if (isType<std::string>(c)){
+                bc2.push_back(2); //代表接下来是一个string；
+                this->writeString(bc2, std::any_cast<std::string>(c));
+                numConsts++;
+            }
+            else if (isType<std::shared_ptr<FunctionSymbol>>(c)){
+                auto functionSym = std::any_cast<std::shared_ptr<FunctionSymbol>>(c);
+                if (built_ins.find(functionSym->name) == built_ins.end()){ //不用写入系统函数
+                    bc2.push_back(3); //代表接下来是一个FunctionSymbol.
+                    auto tmp = this->writeFunctionSymbol(functionSym);
+                    bc2.insert(bc2.end(), tmp.begin(), tmp.end());
+                    numConsts++;
+                }
+            }
+            else{
+                dbg("Unsupported const in BCModuleWriter, type: " + std::string(c.type().name()));
+            }
+        }
 
         //写入类型
+        std::vector<uint8_t> bc1;
+        this->writeString(bc1,"types");
+        bc1.push_back(this->types.size());
+        for (auto t: this->types){
+            std::vector<uint8_t> tmp;
+            if (t->isFunctionType()){
+                tmp = this->writeFunctionType(t);
+            }
+            else if (t->isSimpleType()){
+                tmp = this->writeSimpleType(t);
+            }
+            else{
+                dbg("Unsupported type in BCModuleWriter: " + t->name);
+            }
+            bc1.insert(bc1.end(), tmp.begin(), tmp.end());
+        }
 
+        this->writeString(bc1, "consts");
+        bc1.push_back(numConsts);
 
-        return {};
+        bc1.insert(bc1.end(), bc2.begin(), bc2.end());
+
+        return bc1;
     }
 
     std::vector<uint8_t> writeVarSymbol(std::shared_ptr<Symbol>& s) {
@@ -1092,17 +1151,47 @@ public:
 
         //写入类型名称
         this->writeString(bc, sym->theType->name);
-        auto it = find(this->types.begin(), this->types.end(), sym->theType);
-        if (!SysTypes::isSysType(sym->theType) && it == this->types.end()){
+        if (this->CanAddTypes(sym->theType)) {
             this->types.push_back(sym->theType);
         }
 
         return bc;
     }
 
-    std::vector<uint8_t> writeFunctionSymbol(std::shared_ptr<Symbol>& sym) {
+    std::vector<uint8_t> writeFunctionSymbol(std::shared_ptr<FunctionSymbol>& sym) {
         std::vector<uint8_t> bc;
 
+        //写入函数名称
+        this->writeString(bc, sym->name);
+
+        //写入类型名称
+        this->writeString(bc, sym->theType->name);
+        if (this->CanAddTypes(sym->theType)) {
+            this->types.push_back(sym->theType);
+        }
+
+        //写入操作数栈最大的大小
+        bc.push_back(sym->opStackSize);
+
+        //写入本地变量个数
+        bc.push_back(sym->vars.size());
+
+        //逐一写入变量
+        //TODO：其实具体变量的信息不是必需的。
+        for (auto v: sym->vars){
+            auto tmp = this->writeVarSymbol(v);
+            bc.insert(bc.end(), tmp.begin(), tmp.begin());
+        }
+
+        //写入函数函数体的字节码
+        if(sym->byteCode.empty()){ //内置函数
+            bc.push_back(0);
+        }
+        else{  //自定义函数
+            bc.push_back(sym->byteCode.size());
+            PrintHex(sym->byteCode);
+            bc.insert(bc.end(), sym->byteCode.begin(), sym->byteCode.end());
+        }
         return bc;
     }
 
@@ -1113,6 +1202,7 @@ public:
         }
 
         // TODO in future
+        dbg("Error: current not support yet!");
 
         return bc;
     }

@@ -55,6 +55,10 @@ let i = 1;
     auto vm = VM();
     auto ret = vm.execute(*bc);
     Print("vm.execute ret: " + std::to_string(ret), Color::Yellow);
+
+    auto bcWrite = BCModuleWriter();
+    auto hex = bcWrite.write(*bc);
+    PrintHex(hex);
 }
 
 TEST(Vm, vm_VariableDecl_functionCall)
@@ -233,5 +237,4 @@ println(fourTimes(4));
     auto vm = VM();
     auto ret = vm.execute(*bc);
     Print("vm.execute ret: " + std::to_string(ret), Color::Yellow);
-
 }
