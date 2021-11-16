@@ -1251,4 +1251,189 @@ public:
 };
 
 
+/**
+ * 从字节码生成BCModule
+ */
+class BCModuleReader {
+    //读取字节码时的下标
+    uint32_t index = 0;
+
+    //解析出来的所有类型
+    std::map<std::string, std::shared_ptr<Type>> types;
+
+    std::map<std::string, std::any> typeInfos;
+public:
+
+    std::shared_ptr<BCModule> read(const std::vector<uint8_t>& bc) {
+        //重置状态变量
+        this->index = 0;
+        this->types.clear();
+
+        auto bcModule = std::make_shared<BCModule>();
+
+        //1.读取类型
+        //1.1加入系统内置类型
+        this->addSystemTypes();
+
+        //1.2从字节码中读取类型
+        auto str = this->readString(bc);
+        if(str != "types") {
+            dbg("Error: must read 'types', but: " + str);
+            return nullptr;
+        }
+
+        auto numTypes = bc[this->index++];
+        for (uint8_t i = 0; i < numTypes; i++){
+            auto typeKind = bc[this->index++];
+            switch(typeKind){
+                case 1:
+                    this->readSimpleType(bc);
+                    break;
+                case 2:
+                    this->readFunctionType(bc);
+                    break;
+                case 3:
+                    this->readUnionType(bc);
+                    break;
+                default:
+                    dbg("Unsupported type kind: " + std::to_string(typeKind));
+            }
+        }
+        this->buildTypes();
+
+        //2.读取常量
+        str = this->readString(bc);
+        if(str != "consts") {
+            dbg("Error: must read 'consts', but: " + str);
+            return nullptr;
+        }
+
+        auto numConsts = bc[this->index++];
+        for (uint8_t i = 0; i< numConsts; i++){
+            auto constType = bc[this->index++];
+            if (constType == 1){
+                bcModule->consts.push_back(bc[this->index++]);
+            }
+            else if (constType == 2){
+                auto str = this->readString(bc);
+                bcModule->consts.push_back(str);
+            }
+            else if (constType == 3){
+                auto functionSym = this->readFunctionSymbol(bc);
+                bcModule->consts.push_back(functionSym);
+                if (functionSym->name == "main"){
+                    bcModule->_main = functionSym;
+                }
+            }
+            else{
+                dbg("Unsupported const type: " + std::to_string(constType));
+            }
+        }
+
+        return nullptr;
+    }
+
+    void addSystemTypes() {
+        this->types.insert({"any", SysTypes::Any()});
+        this->types.insert({"number", SysTypes::Number()});
+        this->types.insert({"string", SysTypes::String()});
+        this->types.insert({"integer", SysTypes::Integer()});
+        this->types.insert({"decimal", SysTypes::Decimal()});
+        this->types.insert({"boolean", SysTypes::Boolean()});
+        this->types.insert({"null", SysTypes::Null()});
+        this->types.insert({"undefined", SysTypes::Undefined()});
+        this->types.insert({"void", SysTypes::Void()});
+    }
+
+    void buildTypes() {
+        for(auto& item: this->typeInfos){
+            auto typeName = item.first;
+            auto t = this->types[typeName];
+
+            if (t->isSimpleType()){
+                dbg("Error: BCModuleReader SimpleType not support!");
+                // todo
+            }
+            else if (t->isFunctionType()){
+                auto funtionType = std::dynamic_pointer_cast<FunctionType>(t);
+
+                auto returnType = std::any_cast<std::string>(this->typeInfos[typeName]);
+                auto paramTypes = std::any_cast<std::vector<std::string>>(this->typeInfos[typeName]);
+
+                funtionType->returnType = this->types[returnType];
+                for (const auto& utName: paramTypes){
+                    auto ut = this->types[utName];
+                    funtionType->paramTypes.push_back(ut);
+                }
+            }
+            // not support
+            // else if (t->isUnionType()){
+                // dbg("Error: BCModuleReader UnionType not support!");
+            // }
+            else{
+                dbg("Unsupported type in BCModuleReader: " + t->name);
+            }
+        }
+
+        this->typeInfos.clear();
+    }
+
+    std::string readString(const std::vector<uint8_t>& bc) {
+        uint8_t len = bc[this->index++];
+        std::string str = "";
+        for (uint8_t i = 0; i< len; i++){
+            str += static_cast<char>(bc[this->index++]);
+        }
+        return str;
+    }
+
+    void readSimpleType(const std::vector<uint8_t>& bc) {
+        auto typeName = this->readString(bc);
+        auto numUpperTypes = bc[this->index++];
+        std::vector<std::string> upperTypes;
+        for (uint8_t i = 0; i < numUpperTypes; i++){
+            upperTypes.push_back(this->readString(bc));
+        }
+
+        std::shared_ptr<Type> t = std::make_shared<SimpleType>(typeName);
+        this->types.insert({typeName, t});
+        this->typeInfos.insert({typeName, upperTypes});
+    }
+
+    void readFunctionType(const std::vector<uint8_t>& bc) {
+        auto typeName = this->readString(bc);
+        auto returnType = this->readString(bc);
+        auto numParams = bc[this->index++];
+        std::vector<std::string> paramTypes;
+        for (uint8_t i = 0; i< numParams; i++){
+            paramTypes.push_back(this->readString(bc));
+        }
+
+        std::vector<std::shared_ptr<Type>> parms;
+        std::shared_ptr<Type> t = std::make_shared<FunctionType>(SysTypes::Any(), parms, typeName);
+        this->types.insert({typeName, t});
+        this->typeInfos.insert({typeName, std::make_pair(returnType, paramTypes)});
+    }
+
+    void readUnionType(const std::vector<uint8_t>& bc) {
+        dbg("Error: BCModuleReader::readUnionType not support!");
+    }
+
+    std::shared_ptr<FunctionSymbol> readFunctionSymbol(const std::vector<uint8_t>& bc) {
+        return nullptr;
+    }
+
+    std::shared_ptr<Symbol> readVarSymbol(const std::vector<uint8_t>& bc) {
+        //变量名称
+        auto varName = this->readString(bc);
+
+        //类型名称
+        auto typeName = this->readString(bc);
+        auto varType = this->types[typeName];
+
+        return std::make_shared<VarSymbol>(varName,varType);
+    }
+
+};
+
 #endif
