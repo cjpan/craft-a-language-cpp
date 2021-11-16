@@ -258,7 +258,7 @@ public:
         auto sym = currentScope->getSymbol(variableDecl.name);
         if (sym != nullptr){  //TODO 需要检查sym是否是变量
             declaredSyms->second.insert({variableDecl.name, sym});
-            dbg("insert sym variableDecl: " + variableDecl.name);
+            // dbg("insert sym variableDecl: " + variableDecl.name);
         }
 
         //处理初始化的部分

@@ -25,7 +25,7 @@ public:
      * @param sym
      */
     void enter(const std::string& name, std::shared_ptr<Symbol> sym){
-        dbg("enter sys: " + name);
+        // dbg("enter sys: " + name);
         this->name2sym.insert({name, sym});
     }
 
@@ -43,7 +43,7 @@ public:
      * @returns 根据名称查到的Symbol。如果没有查到，则返回null。
      */
     std::shared_ptr<Symbol> getSymbol(const std::string& name) {
-        dbg("get sys: " + name);
+        // dbg("get sys: " + name);
         auto sym = this->name2sym.find(name);
         if (sym != this->name2sym.end()){
             return sym->second;

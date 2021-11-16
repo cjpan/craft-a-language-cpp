@@ -1087,7 +1087,7 @@ public:
         std::vector<uint8_t> bc2;
         this->types.clear();  //重置状态变量
 
-        dbg(std::string("bcModule.consts size: ") + std::to_string(bcModule.consts.size()));
+        // dbg(std::string("bcModule.consts size: ") + std::to_string(bcModule.consts.size()));
         //写入常量
         uint8_t numConsts = 0;
         for(auto& c: bcModule.consts){
