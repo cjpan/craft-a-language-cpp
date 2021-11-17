@@ -59,6 +59,13 @@ let i = 1;
     auto bcWrite = BCModuleWriter();
     auto hex = bcWrite.write(*bc);
     PrintHex(hex);
+
+    {
+        auto bcRead = BCModuleReader();
+        auto bc = bcRead.read(hex);
+        auto ret = vm.execute(*bc);
+        Print("new vm.execute ret: " + std::to_string(ret), Color::Yellow);
+    }
 }
 
 TEST(Vm, vm_VariableDecl_functionCall)

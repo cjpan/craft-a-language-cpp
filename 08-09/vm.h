@@ -1330,7 +1330,7 @@ public:
             }
         }
 
-        return nullptr;
+        return bcModule;
     }
 
     void addSystemTypes() {
@@ -1357,8 +1357,9 @@ public:
             else if (t->isFunctionType()){
                 auto funtionType = std::dynamic_pointer_cast<FunctionType>(t);
 
-                auto returnType = std::any_cast<std::string>(this->typeInfos[typeName]);
-                auto paramTypes = std::any_cast<std::vector<std::string>>(this->typeInfos[typeName]);
+                std::pair< std::string, std::vector<std::string> > val = std::any_cast< std::pair< std::string, std::vector<std::string> > >(this->typeInfos[typeName]);
+                auto returnType = val.first;
+                auto paramTypes = val.second;
 
                 funtionType->returnType = this->types[returnType];
                 for (const auto& utName: paramTypes){
@@ -1420,7 +1421,40 @@ public:
     }
 
     std::shared_ptr<FunctionSymbol> readFunctionSymbol(const std::vector<uint8_t>& bc) {
-        return nullptr;
+        //函数名称
+        auto functionName = this->readString(bc);
+
+        //读取类型名称
+        auto typeName = this->readString(bc);
+        auto functionType = this->types[typeName];
+
+        //操作数栈的大小
+        auto opStackSize = bc[this->index++];
+
+        //变量个数
+        auto numVars = bc[this->index++];
+
+        //读取变量
+        std::vector<std::shared_ptr<Symbol>> vars;
+        for (uint8_t i = 0; i < numVars; i++){
+            vars.push_back(this->readVarSymbol(bc));
+        }
+
+        //读取函数体的字节码
+        auto numByteCodes = bc[this->index++];
+        std::vector<uint8_t> byteCodes;
+        if (numByteCodes != 0){  //系统函数0
+            byteCodes.insert(byteCodes.end(), bc.begin() + this->index, bc.begin() + this->index + numByteCodes);
+            this->index += numByteCodes;
+        }
+
+        //创建函数符号
+        auto functionSym = std::make_shared<FunctionSymbol>(functionName, functionType);
+        functionSym->vars = vars;
+        functionSym->opStackSize = opStackSize;
+        functionSym->byteCode = byteCodes;
+
+        return functionSym;
     }
 
     std::shared_ptr<Symbol> readVarSymbol(const std::vector<uint8_t>& bc) {
