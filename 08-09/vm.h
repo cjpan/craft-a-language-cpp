@@ -1155,6 +1155,8 @@ public:
             this->types.push_back(sym->theType);
         }
 
+        dbg(sym->theType->name);
+        PrintHex(bc);
         return bc;
     }
 
@@ -1180,7 +1182,7 @@ public:
         //TODO：其实具体变量的信息不是必需的。
         for (auto v: sym->vars){
             auto tmp = this->writeVarSymbol(v);
-            bc.insert(bc.end(), tmp.begin(), tmp.begin());
+            bc.insert(bc.end(), tmp.begin(), tmp.end());
         }
 
         //写入函数函数体的字节码
