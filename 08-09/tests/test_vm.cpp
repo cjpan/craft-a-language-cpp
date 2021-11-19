@@ -123,6 +123,13 @@ println(i);
     auto bcWrite = BCModuleWriter();
     auto hex = bcWrite.write(*bc);
     PrintHex(hex);
+
+    {
+        auto bcRead = BCModuleReader();
+        auto bc = bcRead.read(hex);
+        auto ret = vm.execute(*bc);
+        Print("new vm.execute ret: " + std::to_string(ret), Color::Yellow);
+    }
 }
 
 TEST(Vm, vm_Binary_functionCall)
@@ -182,6 +189,13 @@ println(i);
     auto bcWrite = BCModuleWriter();
     auto hex = bcWrite.write(*bc);
     PrintHex(hex);
+
+    {
+        auto bcRead = BCModuleReader();
+        auto bc = bcRead.read(hex);
+        auto ret = vm.execute(*bc);
+        Print("new vm.execute ret: " + std::to_string(ret), Color::Yellow);
+    }
 }
 
 TEST(VM, vm_function_Decl)
@@ -256,4 +270,11 @@ println(fourTimes(4));
     auto bcWrite = BCModuleWriter();
     auto hex = bcWrite.write(*bc);
     PrintHex(hex);
+
+    {
+        auto bcRead = BCModuleReader();
+        auto bc = bcRead.read(hex);
+        auto ret = vm.execute(*bc);
+        Print("new vm.execute ret: " + std::to_string(ret), Color::Yellow);
+    }
 }
