@@ -20,6 +20,7 @@ SET(SRC_FILE  "common.cpp"
               "scope.cpp"
               "interpretor.cpp"
               "vm.cpp"
+              "asm_x86-64.cpp"
                        )
 add_executable(${PROJECT_NAME} ${SRC_FILE} ${MAIN_FILE})
 include_directories("../third_party/dbg-macro/")
