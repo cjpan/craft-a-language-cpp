@@ -165,11 +165,13 @@ public:
     std::any value;
     Oprand(OprandKind kind, std::any value): kind(kind), value(value) {}
 
-    bool isSame(Oprand oprand1) {
-        return this->kind == oprand1.kind && this->value.type() == oprand1.value.type(); // todo
+    template<typename T>
+    bool isSame(std::shared_ptr<Oprand>& oprand1) {
+        return this->kind == oprand1->kind && this->value.type() == oprand1->value.type() &&
+            std::any_cast<T>(this->value) == std::any_cast<T>(oprand1->value);
     }
 
-    std::string toString() {
+    virtual std::string toString() {
         if(this->kind == OprandKind::bb){
             return std::any_cast<std::string>(this->value);
         }
@@ -203,22 +205,239 @@ class Inst_0: public Inst{
 
 class Inst_1: public Inst{
 public:
-    Oprand oprand;
-    Inst_1(AsmOpCode op, Oprand oprand):Inst(op), oprand(oprand) {}
+    std::shared_ptr<Oprand> oprand;
+    Inst_1(AsmOpCode op, std::shared_ptr<Oprand>& oprand):Inst(op), oprand(oprand) {}
 
     std::string toString() override {
-        return ::toString(this->op) + "\t" + this->oprand.toString();
+        return ::toString(this->op) + "\t" + this->oprand->toString();
     }
 
 };
 
-class Inst_2: public Inst{
-    Oprand oprand1;
-    Oprand oprand2;
-    Inst_2(AsmOpCode op, Oprand oprand1, Oprand oprand2):Inst(op), oprand1(oprand1), oprand2(oprand2) {}
+class Inst_2: public Inst {
+public:
+    std::shared_ptr<Oprand> oprand1;
+    std::shared_ptr<Oprand> oprand2;
+    Inst_2(AsmOpCode op, std::shared_ptr<Oprand>& oprand1, std::shared_ptr<Oprand>& oprand2):Inst(op), oprand1(oprand1), oprand2(oprand2) {}
     std::string toString() override {
-        return ::toString(this->op) + "\t" + this->oprand1.toString() + ", " + this->oprand2.toString();
+        return ::toString(this->op) + "\t" + this->oprand1->toString() + ", " + this->oprand2->toString();
     }
+};
+
+
+class FunctionOprand: public Oprand{
+    std::vector<std::shared_ptr<Oprand>> args;
+    std::shared_ptr<Type> returnType;
+    FunctionOprand(const std::string& funtionName, std::vector<std::shared_ptr<Oprand>>& args, std::shared_ptr<Type> returnType):
+        Oprand(OprandKind::function, funtionName), args(args), returnType(returnType) {
+    }
+
+    std::string toString() override {
+        return "_" + std::any_cast<std::string>(this->value);
+    }
+};
+
+class BasicBlock {
+public:
+    std::vector<std::shared_ptr<Inst>> insts;      //基本块内的指令
+
+    int32_t funIndex {-1};   //函数编号
+    int32_t bbIndex {-1};    //基本块的编号。在Lower的时候才正式编号，去除空块。
+    bool isDestination {false};  //有其他块跳转到该块。
+
+    std::string getName() {
+        if (this->bbIndex != -1 && this->funIndex != -1){
+            return "LBB" + std::to_string(this->funIndex) + "_" + std::to_string(this->bbIndex);
+        }
+        else{
+            return "LBB";
+        }
+    }
+
+    std::string toString(){
+        std::string str;
+        if (this->isDestination){
+            str = this->getName()+":\n";
+        }
+        else{
+            str = "## bb." + std::to_string(this->bbIndex) + "\n";
+        }
+
+        for (auto inst: this->insts){
+            str += ("    " + inst->toString() + "\n");
+        }
+
+        return str;
+    }
+};
+
+class AsmModule{
+public:
+    //每个函数对应的指令数组
+    std::map<std::string, std::vector<std::shared_ptr<BasicBlock>>>  fun2Code;
+
+    //每个函数的变量数，包括参数、本地变量和临时变量
+     std::map<std::string, uint32_t> numTotalVars;
+
+    //是否是叶子函数
+    std::map<std::string, bool> isLeafFunction;
+
+    //字符串常量
+    std::vector<std::string> stringConsts;
+
+    /**
+     * 输出代表该模块的asm文件的字符串。
+     */
+    std::string toString(){
+        std::string str = "    .section	__TEXT,__text,regular,pure_instructions\n";  //伪指令：一个文本的section
+        for (auto& item: this->fun2Code){
+            auto funName = "_" + item.first;
+            str += ("\n    .global " + funName + "\n");  //添加伪指令
+            str += (funName + ":\n");
+            str += "    .cfi_startproc\n";
+            auto bbs = item.second;
+            for (auto& bb: bbs){
+                str += bb->toString();
+            }
+            str += "    .cfi_endproc\n";
+        }
+        return str;
+
+    }
+};
+
+
+struct TempStates{
+    //当前的函数，用于查询本地变量的下标
+    std::shared_ptr<FunctionSymbol> functionSym;
+
+    //当前函数生成的指令
+    std::vector<std::shared_ptr<BasicBlock>> bbs;
+
+    //下一个临时变量的下标
+    uint32_t nextTempVarIndex {0};
+
+    //已经不再使用的临时变量，可以被复用
+    //优先使用返回值寄存器，可以减少寄存器之间的拷贝
+    std::vector<uint32_t> deadTempVars;
+
+    //每个表达式节点对应的临时变量的索引
+    // tempVarMap:Map<Expression, number> = new Map();
+
+    //主要用于判断当前的Unary是一个表达式的一部分，还是独立的一个语句
+    bool inExpression {false};
+
+    //保存一元后缀运算符对应的指令。
+    // postfixUnaryInst:Inst_1|null = null;
+};
+
+
+class AsmGenerator: public AstVisitor{
+public:
+    //编译后的结果
+    std::shared_ptr<AsmModule> asmModule;
+
+    //用来存放返回值的位置
+    std::shared_ptr<Oprand> returnSlot;
+
+    //一些状态变量
+    std::shared_ptr<TempStates> s;
+
+    AsmGenerator() {
+        this->returnSlot = std::make_shared<Oprand>(OprandKind::returnSlot, -1);
+        this->s = std::make_shared<TempStates>();
+    }
+
+    uint32_t allocateTempVar() {
+        uint32_t varIndex = 0;
+        if (this->s->deadTempVars.size() >0){
+            varIndex = this->s->deadTempVars.back();
+            this->s->deadTempVars.pop_back();
+        }
+        else{
+            varIndex = this->s->nextTempVarIndex++;
+        }
+        return varIndex;
+    }
+
+    bool isTempVar(std::shared_ptr<Oprand>& oprand) {
+        if (oprand != nullptr && this->s->functionSym!= nullptr){
+            return oprand->kind == OprandKind::varIndex && isType<uint32_t>(oprand->value) &&
+                std::any_cast<uint32_t>(oprand->value) >= this->s->functionSym->vars.size();
+        }
+        else{
+            return false;
+        }
+    }
+
+    bool isParamOrLocalVar(std::shared_ptr<Oprand>& oprand) {
+        if (this->s->functionSym != nullptr){
+            return oprand->kind == OprandKind::varIndex && isType<uint32_t>(oprand->value) &&
+                std::any_cast<uint32_t>(oprand->value) < this->s->functionSym->vars.size();
+        }
+        else{
+            return false;
+        }
+    }
+
+    /**
+     * 如果操作数不同，则生成mov指令；否则，可以减少一次拷贝。
+     * @param src
+     * @param dest
+     */
+    void movIfNotSame(std::shared_ptr<Oprand>& src, std::shared_ptr<Oprand>& dest) {
+        if (!src->isSame<uint32_t>(dest)){
+            auto inst = std::make_shared<Inst_2>(AsmOpCode::movl, src, dest);
+            this->getCurrentBB()->insts.push_back(inst);
+        }
+    }
+
+    std::shared_ptr<BasicBlock> getCurrentBB() {
+        return this->s->bbs.back();
+    }
+
+    std::shared_ptr<BasicBlock> newBlock(){
+        auto bb = std::make_shared<BasicBlock>();
+        this->s->bbs.push_back(bb);
+
+        return bb;
+    }
+
+    std::any visitProg(Prog& prog, std::string prefix) override {
+        this->s->functionSym = prog.sym;
+        this->s->nextTempVarIndex = this->s->functionSym->vars.size();
+
+        //创建新的基本块
+        this->newBlock();
+
+        this->visitBlock(prog);
+        this->asmModule->fun2Code.insert({this->s->functionSym->name, this->s->bbs});
+        this->asmModule->numTotalVars.insert({this->s->functionSym->name, this->s->nextTempVarIndex});
+
+        return this->asmModule;
+    }
+
+    std::any visitVariable(Variable& variable, std::string prefix) override {
+        if (this->s->functionSym !=nullptr && variable.sym != nullptr){
+            return std::make_shared<Oprand>(OprandKind::varIndex, this->s->functionSym->getVarIndex(variable.sym->name));
+        }
+        return std::any();
+    }
+
+    std::any visitIntegerLiteral(IntegerLiteral& integerLiteral, std::string prefix) override {
+        return std::make_shared<Oprand>(OprandKind::immediate, integerLiteral.value);
+    }
+
+    std::any visitReturnStatement(ReturnStatement& returnStatement, std::string prefix) override {
+        if (returnStatement.exp != nullptr){
+            auto ret = this->visit(*returnStatement.exp);
+            auto op = std::any_cast<std::shared_ptr<Oprand>>(ret);
+            //把返回值赋给相应的寄存器
+            this->movIfNotSame(op, this->returnSlot);
+        }
+        return std::any();
+    }
+
 };
 
 #endif

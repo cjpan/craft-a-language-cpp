@@ -97,6 +97,19 @@ public:
         }
         return ptr->paramTypes.size();
     }
+
+    int32_t getVarIndex(const std::string& varName) {
+        auto compare = [&varName](const std::shared_ptr<Symbol> & var) {
+            return var->name == varName;
+        };
+        auto iter = std::find_if(this->vars.begin(), this->vars.end(), compare);
+        if (iter == this->vars.end()) {
+            dbg("Error: Can find variable in function, get valName: " + varName);
+            return -1;
+        }
+
+        return iter - this->vars.begin();
+    }
 };
 
 class SymbolDumper: public SymbolVisitor{
