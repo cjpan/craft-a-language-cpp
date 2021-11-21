@@ -142,3 +142,37 @@ std::string toString(OprandKind kind) {
 
     return iter->second;
 }
+
+std::string compileToAsm(AstNode& node, bool verbose){
+
+    auto asmGenerator = AsmGenerator();
+
+    //生成LIR
+    auto val = asmGenerator.visit(node);
+    if (!val.has_value() || !isType<std::shared_ptr<AsmModule>>(val)) {
+        dbg("Error: asmGenerator.visit error.");
+        return "";
+    }
+
+    auto asmModule = std::any_cast<std::shared_ptr<AsmModule>>(val);
+    if (verbose){
+        dbg("before Lower:");
+        Print(asmModule->toString());
+    }
+
+    /*
+    //Lower
+    let lower = new Lower(asmModule);
+    lower.lowerModule();
+
+    let asm = asmModule.toString();
+    if (verbose){
+        console.log("在Lower之后：");
+        console.log(asm);
+    }
+
+    return asm;
+    */
+
+    return "";
+}

@@ -173,18 +173,32 @@ public:
 
     virtual std::string toString() {
         if(this->kind == OprandKind::bb){
-            return std::any_cast<std::string>(this->value);
+            return value2String();
         }
         else if (this->kind == OprandKind::immediate){
-            return "$" + std::any_cast<std::string>(this->value);
+            return "$" + value2String();
         }
         else if (this->kind == OprandKind::returnSlot){
                 return "returnSlot";
         }
         else{
-            return ::toString(this->kind) + "(" + std::any_cast<std::string>(this->value) + ")";
+            return ::toString(this->kind) + "(" + value2String() + ")";
         }
 
+    }
+
+    std::string value2String() {
+        if (isType<uint32_t>(this->value)) {
+            auto val = std::any_cast<uint32_t>(this->value);
+            return std::to_string(val);
+        } else if (isType<int32_t>(this->value)) {
+            auto val = std::any_cast<int32_t>(this->value);
+            return std::to_string(val);
+        } else if (isType<std::string>(this->value)) {
+            return std::any_cast<std::string>(this->value);
+        } else {
+            return std::string("Oprand unsupport type") + this->value.type().name();
+        }
     }
 };
 
@@ -192,7 +206,7 @@ class Inst{
 public:
     AsmOpCode op;
     Inst(AsmOpCode op):op(op) {}
-    virtual std::string toString();
+    virtual std::string toString() = 0;
 };
 
 class Inst_0: public Inst{
@@ -344,6 +358,7 @@ public:
     std::shared_ptr<TempStates> s;
 
     AsmGenerator() {
+        this->asmModule = std::make_shared<AsmModule>();
         this->returnSlot = std::make_shared<Oprand>(OprandKind::returnSlot, -1);
         this->s = std::make_shared<TempStates>();
     }
@@ -417,6 +432,38 @@ public:
         return this->asmModule;
     }
 
+
+    std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
+        if(variableDecl.init != nullptr && this->s->functionSym != nullptr){
+            auto r = this->visit(*variableDecl.init);
+            if (!r.has_value() || !isType<std::shared_ptr<Oprand>>(r)) {
+                dbg("Error: visitVariableDecl expect Oprand");
+                return std::any();
+            }
+
+            std::shared_ptr<Oprand> right = std::any_cast<std::shared_ptr<Oprand>>(r);
+
+            auto left = std::make_shared<Oprand>(OprandKind::varIndex, this->s->functionSym->getVarIndex(variableDecl.sym->name));
+            //不可以两个都是内存变量
+            if (this->isParamOrLocalVar(right) || right->kind == OprandKind::immediate){
+                auto newRight = std::make_shared<Oprand>(OprandKind::varIndex, this->allocateTempVar());
+                this->getCurrentBB()->insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, right, newRight));
+                if (this->isTempVar(right)){
+                    if (!isType<uint32_t>(right->value)) {
+                        dbg("Error: visitVariableDecl isTempVar expect uint32_t");
+                        return std::any();
+                    }
+                    uint32_t index = std::any_cast<uint32_t>(right->value);
+                    this->s->deadTempVars.push_back(index);
+                }
+                right = newRight;
+            }
+            this->movIfNotSame(right, left);
+            return left;
+        }
+        return std::any();
+    }
+
     std::any visitVariable(Variable& variable, std::string prefix) override {
         if (this->s->functionSym !=nullptr && variable.sym != nullptr){
             return std::make_shared<Oprand>(OprandKind::varIndex, this->s->functionSym->getVarIndex(variable.sym->name));
@@ -439,5 +486,8 @@ public:
     }
 
 };
+
+
+std::string compileToAsm(AstNode& node, bool verbose = true);
 
 #endif
