@@ -240,6 +240,7 @@ public:
 
 
 class FunctionOprand: public Oprand{
+public:
     std::vector<std::shared_ptr<Oprand>> args;
     std::shared_ptr<Type> returnType;
     FunctionOprand(const std::string& funtionName, std::vector<std::shared_ptr<Oprand>>& args, std::shared_ptr<Type> returnType):
@@ -276,7 +277,7 @@ public:
         else{
             str = "## bb." + std::to_string(this->bbIndex) + "\n";
         }
-
+        dbg("--------- inst.size " + std::to_string(this->insts.size()));
         for (auto inst: this->insts){
             str += ("    " + inst->toString() + "\n");
         }
@@ -310,6 +311,7 @@ public:
             str += (funName + ":\n");
             str += "    .cfi_startproc\n";
             auto bbs = item.second;
+            dbg("--------- bb.size " + std::to_string(bbs.size()));
             for (auto& bb: bbs){
                 str += bb->toString();
             }
@@ -432,7 +434,7 @@ public:
         return this->asmModule;
     }
 
-
+    /*
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
         if(variableDecl.init != nullptr && this->s->functionSym != nullptr){
             auto r = this->visit(*variableDecl.init);
@@ -462,6 +464,35 @@ public:
             return left;
         }
         return std::any();
+    }*/
+
+    std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
+        if(this->s->functionSym !=nullptr){
+            std::shared_ptr<Oprand> right;
+            if (variableDecl.init != nullptr){
+                auto r = this->visit(*variableDecl.init);
+                if (!r.has_value() || !isType<std::shared_ptr<Oprand>>(r)) {
+                    dbg("Error: visitVariableDecl expect Oprand");
+                    return std::any();
+                }
+
+                right = std::any_cast<std::shared_ptr<Oprand>>(r);
+            }
+            auto varIndex = this->s->functionSym->getVarIndex(variableDecl.sym->name);
+            auto left = std::make_shared<Oprand>(OprandKind::varIndex, varIndex);
+
+            //插入一条抽象指令，代表这里声明了一个变量
+            this->getCurrentBB()->insts.push_back(std::make_shared<Inst_1>(AsmOpCode::decl, left));
+
+            //赋值
+            if (right != nullptr) {
+                this->movIfNotSame(right, left);
+            }
+
+            return left;
+        }
+
+        return std::any();
     }
 
     std::any visitVariable(Variable& variable, std::string prefix) override {
@@ -482,6 +513,43 @@ public:
             //把返回值赋给相应的寄存器
             this->movIfNotSame(op, this->returnSlot);
         }
+        return std::any();
+    }
+
+    std::any visitFunctionCall(FunctionCall& functionCall, std::string prefix) override {
+        //当前函数不是叶子函数
+        this->asmModule->isLeafFunction.insert({this->s->functionSym->name, false});
+
+        auto& insts = this->getCurrentBB()->insts;
+
+        std::vector<std::shared_ptr<Oprand>> args;
+        for(auto arg: functionCall.arguments){
+            auto res = this->visit(*arg);
+            if (!res.has_value() || !isType<std::shared_ptr<Oprand>>(res)) {
+                dbg("Error: visitFunctionCall get arg failed: ");
+                return std::any();
+            }
+
+            auto oprand = std::any_cast<std::shared_ptr<Oprand>>(res);
+            args.push_back(oprand);
+        }
+
+        auto functionSym = functionCall.sym;
+        auto functionType = std::dynamic_pointer_cast<FunctionType>(functionSym->theType);
+
+        dbg("--------- inst.size " + std::to_string(insts.size()));
+        std::shared_ptr<Oprand> op = std::make_shared<FunctionOprand>(functionCall.name, args, functionType->returnType);
+        insts.push_back(std::make_shared<Inst_1>(AsmOpCode::callq, op));
+
+        //把结果放到一个新的临时变量里
+        if(functionType->returnType != SysTypes::Void()) { //函数有返回值时
+            auto dest = std::make_shared<Oprand>(OprandKind::varIndex, this->allocateTempVar());
+            insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, this->returnSlot, dest));
+            return dest;
+        }
+
+        dbg("--------- inst.size " + std::to_string(insts.size()));
+
         return std::any();
     }
 
