@@ -365,6 +365,20 @@ public:
         this->s = std::make_shared<TempStates>();
     }
 
+    std::shared_ptr<Oprand> any2Oprand(const std::any& val) {
+        if (!val.has_value()) {
+            dbg("Error: any2Oprand not has value!");
+            return nullptr;
+        }
+
+        if (!isType<std::shared_ptr<Oprand>>(val)) {
+            dbg("Error: any2Oprand expect Oprand, but " + std::string(val.type().name()));
+            return nullptr;
+        }
+
+        return std::any_cast<std::shared_ptr<Oprand>>(val);
+    }
+
     uint32_t allocateTempVar() {
         uint32_t varIndex = 0;
         if (this->s->deadTempVars.size() >0){
@@ -471,12 +485,11 @@ public:
             std::shared_ptr<Oprand> right;
             if (variableDecl.init != nullptr){
                 auto r = this->visit(*variableDecl.init);
-                if (!r.has_value() || !isType<std::shared_ptr<Oprand>>(r)) {
-                    dbg("Error: visitVariableDecl expect Oprand");
+                right = any2Oprand(r);
+                if (right == nullptr) {
+                    dbg("Error: expect oprand!");
                     return std::any();
                 }
-
-                right = std::any_cast<std::shared_ptr<Oprand>>(r);
             }
             auto varIndex = this->s->functionSym->getVarIndex(variableDecl.sym->name);
             auto left = std::make_shared<Oprand>(OprandKind::varIndex, varIndex);
@@ -509,10 +522,41 @@ public:
     std::any visitReturnStatement(ReturnStatement& returnStatement, std::string prefix) override {
         if (returnStatement.exp != nullptr){
             auto ret = this->visit(*returnStatement.exp);
-            auto op = std::any_cast<std::shared_ptr<Oprand>>(ret);
+            auto op = any2Oprand(ret);
+            if (op == nullptr) {
+                dbg("Error: expect oprand!");
+                return std::any();
+            }
             //把返回值赋给相应的寄存器
             this->movIfNotSame(op, this->returnSlot);
         }
+        return std::any();
+    }
+
+    std::any visitFunctionDecl(FunctionDecl& functionDecl, std::string prefix) override {
+        //保存原来的状态信息
+        auto s = this->s;
+
+        //新建立状态信息
+        this->s = std::make_shared<TempStates>();
+        this->s->functionSym = functionDecl.sym;
+        this->s->nextTempVarIndex = this->s->functionSym->vars.size();
+
+        //计算当前函数是不是叶子函数
+        //先设置成叶子变量。如果遇到函数调用，则设置为false。
+        this->asmModule->isLeafFunction.insert({this->s->functionSym->name, true});
+
+        //创建新的基本块
+        this->newBlock();
+
+        //生成代码
+        this->visit(*functionDecl.body, "");
+        this->asmModule->fun2Code.insert({this->s->functionSym->name, this->s->bbs});
+        this->asmModule->numTotalVars.insert({this->s->functionSym->name, this->s->nextTempVarIndex});
+
+        //恢复原来的状态信息
+        this->s = s;
+
         return std::any();
     }
 
@@ -552,6 +596,116 @@ public:
 
         return std::any();
     }
+
+    std::any visitBinary(Binary& bi, std::string prefix) override {
+        this->s->inExpression = true;
+
+        auto& insts = this->getCurrentBB()->insts;
+
+
+        //左子树返回的操作数
+        auto l = this->visit(*bi.exp1);
+        auto left = any2Oprand(l);
+        if (left == nullptr) {
+            dbg("Error: expect left oprand");
+            return std::any();
+        }
+
+        //右子树
+        auto r = this->visit(*bi.exp2);
+        auto right = any2Oprand(r);
+        if (right == nullptr) {
+            dbg("Error: expect right oprand");
+            return std::any();
+        }
+
+
+        //计算出一个目标操作数
+        auto dest = left;
+
+        if (!this->isTempVar(dest)){
+            dest = std::make_shared<Oprand>(OprandKind::varIndex, this->allocateTempVar());
+            insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, left, dest));
+        }
+
+        //释放掉不用的临时变量
+        if (this->isTempVar(right)){
+            this->s->deadTempVars.push_back(std::any_cast<uint32_t>(right->value));
+        }
+
+        //生成指令
+        //todo 有问题的地方
+        switch(bi.op){
+            case Op::Plus: //'+'
+                if (bi.theType == SysTypes::String()) { //字符串加
+                    // let args:Oprand[] = [];
+                    // args.push(left);
+                    // args.push(right);
+                    // this->callIntrinsics("string_concat", args);
+                    dbg("Error: current not support SysTypes::String");
+                    return std::any();
+                }
+                else{
+                    // this->movIfNotSame(left,dest);
+                    insts.push_back(std::make_shared<Inst_2>(AsmOpCode::addl,right, dest));
+                }
+                break;
+            case Op::Minus: //'-'
+                // this->movIfNotSame(left,dest);
+                insts.push_back(std::make_shared<Inst_2>(AsmOpCode::subl,right, dest));
+                break;
+            case Op::Multiply: //'*'
+                // this->movIfNotSame(left,dest);
+                insts.push_back(std::make_shared<Inst_2>(AsmOpCode::imull,right, dest));
+                break;
+            case Op::Divide: //'/'
+                // this->movIfNotSame(left,dest);
+                insts.push_back(std::make_shared<Inst_2>(AsmOpCode::idivl,right, dest));
+                break;
+            case Op::Assign: //'='
+                // this->movIfNotSame(right,left);
+                insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl,right, dest));
+                this->movIfNotSame(dest,left);    //写到内存里去
+                break;
+            case Op::G:
+            case Op::L:
+            case Op::GE:
+            case Op::LE:
+            case Op::EQ:
+            case Op::NE:
+                dbg("Unsupported OpCode in AsmGenerator.visitBinary: " + toString(bi.op));
+                // insts.push_back(std::make_shared<Inst_2>(AsmOpCode::cmpl, right, dest));
+                // dest = std::make_shared<Oprand>(OprandKind::flag, this->getOpsiteOp(bi.op));
+                // break;
+            default:
+                dbg("Unsupported OpCode in AsmGenerator.visitBinary: " + toString(bi.op));
+        }
+
+        this->s->inExpression = false;
+
+        return dest;
+    }
+
+};
+
+//Lower
+class Register: public Oprand{
+    uint32_t bits = 32;  //寄存器的位数
+public:
+    Register(const std::string registerName, uint32_t bits = 32) : Oprand(OprandKind::regist, registerName),
+        bits(bits) {
+    }
+
+    //可供分配的寄存器的数量
+    //16个通用寄存器中，扣除rbp和rsp，然后保留一个寄存器，用来作为与内存变量交换的区域。
+    const static uint32_t numAvailableRegs;
+
+    static std::shared_ptr<Oprand> edi() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("edi");
+        return oprand;
+    }
+
+    static std::vector<std::shared_ptr<Oprand>> registers32;
 
 };
 

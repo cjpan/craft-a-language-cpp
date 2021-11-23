@@ -143,6 +143,13 @@ std::string toString(OprandKind kind) {
     return iter->second;
 }
 
+const uint32_t Register::numAvailableRegs = 13;
+
+std::vector<std::shared_ptr<Oprand>> Register::registers32 {
+    Register::edi(),
+
+};
+
 std::string compileToAsm(AstNode& node, bool verbose){
 
     auto asmGenerator = AsmGenerator();
