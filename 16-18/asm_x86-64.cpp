@@ -145,10 +145,107 @@ std::string toString(OprandKind kind) {
 
 const uint32_t Register::numAvailableRegs = 13;
 
+//32位寄存器
 std::vector<std::shared_ptr<Oprand>> Register::registers32 {
+    Register::eax(),
+
+    Register::r10d(),
+    Register::r11d(),
+
     Register::edi(),
+    Register::esi(),
+    Register::edx(),
+    Register::ecx(),
+    Register::r8d(),
+    Register::r9d(),
+
+    Register::ebx(),
+    Register::r12d(),
+    Register::r13d(),
+    Register::r14d(),
+    Register::r15d(),
+};
+
+std::vector<std::shared_ptr<Oprand>> Register::paramRegisters32 {
+    Register::edi(),
+    Register::esi(),
+    Register::edx(),
+    Register::ecx(),
+    Register::r8d(),
+    Register::r9d(),
 
 };
+
+std::vector<std::shared_ptr<Oprand>> Register::calleeProtected32 {
+    Register::ebx(),
+    Register::r12d(),
+    Register::r13d(),
+    Register::r14d(),
+    Register::r15d(),
+
+};
+
+std::vector<std::shared_ptr<Oprand>> Register::callerProtected32 {
+    Register::edi(),
+    Register::esi(),
+    Register::edx(),
+    Register::ecx(),
+    Register::r8d(),
+    Register::r9d(),
+
+    Register::r10d(),
+    Register::r11d(),
+
+    Register::eax(),
+
+};
+
+//64位的可供分配的寄存器
+std::vector<std::shared_ptr<Oprand>> Register::registers64 {
+        Register::rax(),
+
+        Register::r10(),
+        Register::r11(),
+
+        Register::rdi(),
+        Register::rsi(),
+        Register::rdx(),
+        Register::rcx(),
+        Register::r8(),
+        Register::r9(),
+
+        Register::rbx(),
+        Register::r12(),
+        Register::r13(),
+        Register::r14(),
+        Register::r15(),
+
+};
+
+std::vector<std::shared_ptr<Oprand>> Register::calleeProtected64 {
+        Register::rbx(),
+        Register::r12(),
+        Register::r13(),
+        Register::r14(),
+        Register::r15(),
+
+};
+
+std::vector<std::shared_ptr<Oprand>> Register::callerProtected64 {
+        Register::rdi(),
+        Register::rsi(),
+        Register::rdx(),
+        Register::rcx(),
+        Register::r8(),
+        Register::r9(),
+
+        Register::r10(),
+        Register::r11(),
+
+        Register::rax(),
+
+};
+
 
 std::string compileToAsm(AstNode& node, bool verbose){
 

@@ -292,6 +292,7 @@ public:
     std::map<std::string, std::vector<std::shared_ptr<BasicBlock>>>  fun2Code;
 
     //每个函数的变量数，包括参数、本地变量和临时变量
+     std::map<std::string, uint32_t> numParams;
      std::map<std::string, uint32_t> numTotalVars;
 
     //是否是叶子函数
@@ -443,6 +444,7 @@ public:
 
         this->visitBlock(prog);
         this->asmModule->fun2Code.insert({this->s->functionSym->name, this->s->bbs});
+        this->asmModule->numParams.insert({this->s->functionSym->name, this->s->functionSym->getNumParams()});
         this->asmModule->numTotalVars.insert({this->s->functionSym->name, this->s->nextTempVarIndex});
 
         return this->asmModule;
@@ -552,6 +554,7 @@ public:
         //生成代码
         this->visit(*functionDecl.body, "");
         this->asmModule->fun2Code.insert({this->s->functionSym->name, this->s->bbs});
+        this->asmModule->numParams.insert({this->s->functionSym->name, this->s->functionSym->getNumParams()});
         this->asmModule->numTotalVars.insert({this->s->functionSym->name, this->s->nextTempVarIndex});
 
         //恢复原来的状态信息
@@ -700,14 +703,310 @@ public:
     //16个通用寄存器中，扣除rbp和rsp，然后保留一个寄存器，用来作为与内存变量交换的区域。
     const static uint32_t numAvailableRegs;
 
+    //32位寄存器
+    //参数用的寄存器，当然也要由caller保护
     static std::shared_ptr<Oprand> edi() {
         static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("edi");
         return oprand;
     }
 
-    static std::vector<std::shared_ptr<Oprand>> registers32;
+    static std::shared_ptr<Oprand> esi() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("esi");
+        return oprand;
+    }
 
+    static std::shared_ptr<Oprand> edx() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("edx");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> ecx() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("ecx");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r8d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r8d");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r9d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r9d");
+        return oprand;
+    }
+
+    //通用寄存器:caller（调用者）负责保护
+    static std::shared_ptr<Oprand> r10d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r10d");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r11d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r11d");
+        return oprand;
+    }
+
+    //返回值，也由Caller保护
+    static std::shared_ptr<Oprand> eax() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("eax");
+        return oprand;
+    }
+
+    //通用寄存器:callee（调用者）负责保护
+    static std::shared_ptr<Oprand> ebx() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("ebx");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r12d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r12d");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r13d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r13d");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r14d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r14d");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r15d() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r15d");
+        return oprand;
+    }
+
+    //栈顶和栈底
+    static std::shared_ptr<Oprand> esp() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("esp");
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> ebp() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("ebp");
+        return oprand;
+    }
+
+    static std::vector<std::shared_ptr<Oprand>> registers32;
+    static std::vector<std::shared_ptr<Oprand>> paramRegisters32;
+    static std::vector<std::shared_ptr<Oprand>> calleeProtected32;
+    static std::vector<std::shared_ptr<Oprand>> callerProtected32;
+
+    //64位寄存器
+    //参数用的寄存器，当然也要由caller保护
+    static std::shared_ptr<Oprand> rdi() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rdi", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> rsi() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rsi", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> rdx() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rdx", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> rcx() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rcx", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r8() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r8", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r9() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r9", 64);
+        return oprand;
+    }
+
+    //通用寄存器:caller（调用者）负责保护
+    static std::shared_ptr<Oprand> r10() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r10", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r11() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r11", 64);
+        return oprand;
+    }
+    //返回值，也由Caller保护
+    static std::shared_ptr<Oprand> rax() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rax", 64);
+        return oprand;
+    }
+
+    //通用寄存器:callee（调用者）负责保护
+    static std::shared_ptr<Oprand> rbx() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rbx", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r12() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r12", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r13() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r13", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r14() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r14", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> r15() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("r15", 64);
+        return oprand;
+    }
+
+    //栈顶和栈底
+    static std::shared_ptr<Oprand> rsp() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rsp", 64);
+        return oprand;
+    }
+
+    static std::shared_ptr<Oprand> rbp() {
+        static std::shared_ptr<Oprand> oprand = std::make_shared<Register>("rbp", 64);
+        return oprand;
+    }
+
+    //64位的可供分配的寄存器
+    static std::vector<std::shared_ptr<Oprand>> registers64;
+    static std::vector<std::shared_ptr<Oprand>> calleeProtected64;
+    static std::vector<std::shared_ptr<Oprand>> callerProtected64;
+
+    std::string toString() override {
+        return "%"+ std::any_cast<std::string>(this->value);
+    }
 };
+
+class MemAddress: public Oprand{
+public:
+    std::shared_ptr<Register> regist;
+    int32_t offset;
+    MemAddress(std::shared_ptr<Register>& regist, int32_t offset): Oprand(OprandKind::memory, "undefined"), offset(offset) {}
+    std::string toString() override {
+        //输出结果类似于：8(%rbp)
+        //如果offset为0，那么不显示，即：(%rbp)
+        return (this->offset == 0 ? std::string("") : std::to_string(this->offset)) + "(" + this->regist->toString() + ")";
+    }
+};
+
+class Lower {
+public:
+     //前一步生成的LIR模型
+    std::shared_ptr<AsmModule> asmModule;
+
+    //当前函数使用到的那些Caller保护的寄存器
+    std::vector<std::shared_ptr<Oprand>> usedCallerProtectedRegs;
+
+    //当前函数使用到的那些Callee保护的寄存器
+    std::vector<std::shared_ptr<Oprand>>  usedCalleeProtectedRegs;
+
+    //所有变量的总数，包括参数、本地变量和临时变量
+    uint32_t numTotalVars = 0;
+
+    //当前函数的参数数量
+    uint32_t numParams = 0;
+
+    //当前函数的本地变量数量
+    uint32_t numLocalVars = 0;
+
+    //临时变量的数量
+    uint32_t numTempVars = 0;
+
+    //保存已经被Lower的Oprand，用于提高效率
+    std::map<uint32_t, std::shared_ptr<Oprand>> lowedVars;
+
+    //需要在栈里保存的为函数传参（超过6个之后的参数）保留的空间，每个参数占8个字节
+    uint32_t numArgsOnStack = 0;
+
+    //rsp应该移动的量。这个量再加8就是该函数所对应的栈桢的大小，其中8是callq指令所压入的返回地址
+    int32_t rspOffset = 0;
+
+    //是否使用RedZone，也就是栈顶之外的128个字节
+    bool canUseRedZone = false;
+
+    //已被分配的寄存器
+    std::map<std::string, uint32_t> allocatedRegisters;
+
+    Lower(std::shared_ptr<AsmModule>& asmModule): asmModule(asmModule) {}
+
+    void lowerModule() {
+        std::map<std::string, std::vector<std::shared_ptr<BasicBlock>>> newFun2Code;
+        int32_t funIndex = 0;
+        for (auto item: this->asmModule->fun2Code){
+            auto fun = item.first;
+            auto bbs = item.second;
+            auto newBBs = this->lowerFunction(fun, bbs, funIndex++);
+            newFun2Code.insert({fun, newBBs});
+        }
+        this->asmModule->fun2Code = newFun2Code;
+    }
+
+    std::vector<std::shared_ptr<BasicBlock>> lowerFunction(const std::string& funName, std::vector<std::shared_ptr<BasicBlock>>& bbs, int32_t funIndex) {
+        //初始化一些状态变量
+        this->initStates(funName);
+
+        //分配寄存器
+        this->lowerVars();
+
+        // console.log(this);   //打印一下，看看状态变量是否对。
+
+        //lower每个BasicBlock中的指令
+        for (auto& bb: bbs){
+            std::vector<std::shared_ptr<Inst>> newInsts;
+            this->lowerInsts(bb->insts, newInsts);
+            bb->insts = newInsts;
+        }
+
+        //添加序曲
+        this->addPrologue(bbs[0]->insts);
+
+        //添加尾声
+        this->addEpilogue(bbs.back()->insts);
+
+        //基本块的标签和跳转指令。
+        auto newBBs = this->lowerBBLabelAndJumps(bbs, funIndex);
+
+        return newBBs;
+    }
+
+    void initStates(const std::string& funName) {
+
+    }
+
+    void lowerVars() {
+
+    }
+
+    void lowerInsts(const std::vector<std::shared_ptr<Inst>>& insts, std::vector<std::shared_ptr<Inst>>& newInsts) {
+
+    }
+
+    void addPrologue(std::vector<std::shared_ptr<Inst>>& newInsts) {
+
+    }
+
+    void addEpilogue(std::vector<std::shared_ptr<Inst>>& newInsts) {
+
+    }
+
+    std::vector<std::shared_ptr<BasicBlock>> lowerBBLabelAndJumps(std::vector<std::shared_ptr<BasicBlock>>& bbs, int32_t funIndex) {
+        return {};
+    }
+};
+
+
 
 
 std::string compileToAsm(AstNode& node, bool verbose = true);
