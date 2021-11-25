@@ -1076,17 +1076,19 @@ public:
     }
 
     void freeRegister(std::shared_ptr<Oprand>& reg){
-        // auto it = this->allocatedRegisters.find(reg->name);
-        // if (it != this->allocatedRegisters.end())
-            // this->allocatedRegisters.erase(it);
+        auto it = this->allocatedRegisters.find(reg->name);
+        if (it != this->allocatedRegisters.end())
+            this->allocatedRegisters.erase(it);
 
-        // auto index = this->usedCalleeProtectedRegs.indexOf(reg);
-        // if (index != -1)
-            // this->usedCalleeProtectedRegs.splice(index,1);
+        auto iter1 = std::find(this->usedCalleeProtectedRegs.begin(), this->usedCalleeProtectedRegs.end(), reg);
+        if (iter1 != this->usedCalleeProtectedRegs.end()) {
+            this->usedCalleeProtectedRegs.erase(iter1);
+        }
 
-        // index = this->usedCallerProtectedRegs.indexOf(reg);
-        // if (index != -1)
-            // this->usedCallerProtectedRegs.splice(index,1);
+        auto iter2 = std::find(this->usedCallerProtectedRegs.begin(), this->usedCallerProtectedRegs.end(), reg);
+        if (iter2 != this->usedCallerProtectedRegs.end()) {
+            this->usedCallerProtectedRegs.erase(iter2);
+        }
     }
 
     void lowerInsts(const std::vector<std::shared_ptr<Inst>>& insts, std::vector<std::shared_ptr<Inst>>& newInsts) {
