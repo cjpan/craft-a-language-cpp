@@ -24,6 +24,7 @@
 #include <type_traits>
 #include <mutex>
 #include <optional>
+#include<climits>
 
 /**
  * 指令的编码
@@ -163,7 +164,8 @@ class Oprand {
 public:
     OprandKind kind;
     std::any value;
-    Oprand(OprandKind kind, std::any value): kind(kind), value(value) {}
+    std::string name;
+    Oprand(OprandKind kind, std::any value, std::string name = ""): kind(kind), value(value), name(name) {}
 
     template<typename T>
     bool isSame(std::shared_ptr<Oprand>& oprand1) {
@@ -291,9 +293,10 @@ public:
     //每个函数对应的指令数组
     std::map<std::string, std::vector<std::shared_ptr<BasicBlock>>>  fun2Code;
 
-    //每个函数的变量数，包括参数、本地变量和临时变量
-     std::map<std::string, uint32_t> numParams;
-     std::map<std::string, uint32_t> numTotalVars;
+
+     std::map<std::string, uint32_t> numParams;  //每个函数的参数
+     std::map<std::string, uint32_t> numVars;  // 每个函数的变量数，包括参数、本地变量
+     std::map<std::string, uint32_t> numTotalVars; //每个函数的总变量数，包括参数、本地变量和临时变量
 
     //是否是叶子函数
     std::map<std::string, bool> isLeafFunction;
@@ -445,6 +448,7 @@ public:
         this->visitBlock(prog);
         this->asmModule->fun2Code.insert({this->s->functionSym->name, this->s->bbs});
         this->asmModule->numParams.insert({this->s->functionSym->name, this->s->functionSym->getNumParams()});
+        this->asmModule->numVars.insert({this->s->functionSym->name, this->s->functionSym->vars.size()});
         this->asmModule->numTotalVars.insert({this->s->functionSym->name, this->s->nextTempVarIndex});
 
         return this->asmModule;
@@ -555,6 +559,7 @@ public:
         this->visit(*functionDecl.body, "");
         this->asmModule->fun2Code.insert({this->s->functionSym->name, this->s->bbs});
         this->asmModule->numParams.insert({this->s->functionSym->name, this->s->functionSym->getNumParams()});
+        this->asmModule->numVars.insert({this->s->functionSym->name, this->s->functionSym->vars.size()});
         this->asmModule->numTotalVars.insert({this->s->functionSym->name, this->s->nextTempVarIndex});
 
         //恢复原来的状态信息
@@ -695,7 +700,7 @@ public:
 class Register: public Oprand{
     uint32_t bits = 32;  //寄存器的位数
 public:
-    Register(const std::string registerName, uint32_t bits = 32) : Oprand(OprandKind::regist, registerName),
+    Register(const std::string registerName, uint32_t bits = 32) : Oprand(OprandKind::regist, registerName, registerName),
         bits(bits) {
     }
 
@@ -891,9 +896,9 @@ public:
 
 class MemAddress: public Oprand{
 public:
-    std::shared_ptr<Register> regist;
+    std::shared_ptr<Oprand> regist;
     int32_t offset;
-    MemAddress(std::shared_ptr<Register>& regist, int32_t offset): Oprand(OprandKind::memory, "undefined"), offset(offset) {}
+    MemAddress(std::shared_ptr<Oprand>& regist, int32_t offset): Oprand(OprandKind::memory, "undefined"), offset(offset) {}
     std::string toString() override {
         //输出结果类似于：8(%rbp)
         //如果offset为0，那么不显示，即：(%rbp)
@@ -982,11 +987,106 @@ public:
     }
 
     void initStates(const std::string& funName) {
+        this->usedCalleeProtectedRegs.clear();
+        this->usedCallerProtectedRegs.clear();
+        this->numTotalVars = this->asmModule->numTotalVars[funName];
+        this->numParams = this->asmModule->numParams[funName];
+        this->numLocalVars = this->asmModule->numVars[funName] - this->numParams;
+        this->numTempVars = this->numTotalVars - this->asmModule->numVars[funName];
+        this->numArgsOnStack = 0;
+        this->rspOffset = 0;
+        this->lowedVars.clear();
+        this->allocatedRegisters.clear();
 
+        //是否可以使用RedZone
+        //需要是叶子函数，并且对栈外空间的使用量小于128个字节，也就是32个整数
+        this->canUseRedZone = false;
+        bool isLeafFunction = this->asmModule->isLeafFunction[funName];
+        if (isLeafFunction){
+            uint32_t paramsToSave = (this->numParams > 6) ? 6: this->numParams;
+            uint32_t bytes = paramsToSave * 4 + this->numLocalVars * 4 + Register::calleeProtected32.size() * 8;
+            this->canUseRedZone = bytes < 128u;
+        }
+        return;
     }
 
     void lowerVars() {
+        uint32_t paramsToSave = this->numParams > 6 ? 6: this->numParams;
 
+        //处理参数
+        for (uint32_t varIndex = 0; varIndex < this->numTotalVars; varIndex++){
+            std::shared_ptr<Oprand> newOprand;
+            if (varIndex < this->numParams){
+                if (varIndex < 6){
+                    //从自己的栈桢里访问。在程序的序曲里，就把这些变量拷贝到栈里了。
+                    int32_t offset = -(varIndex + 1) * 4;
+                    auto oprand = Register::rbp();
+                    newOprand = std::make_shared<MemAddress>(oprand, offset);
+                }
+                else{
+                    //从Caller的栈里访问参数
+                    int32_t offset = (varIndex - 6) * 8 + 16;  //+16是因为有一个callq压入的返回地址，一个pushq rbp又加了8个字节
+                    auto oprand = Register::rbp();
+                    newOprand = std::make_shared<MemAddress>(oprand, offset);
+                }
+            }
+            //本地变量，在栈桢里。
+            else if (varIndex < this->numParams + this->numLocalVars) {
+                int32_t offset = -(varIndex - this->numParams + paramsToSave + 1) * 4;
+                auto oprand = Register::rbp();
+                newOprand = std::make_shared<MemAddress>(oprand, offset);
+            }
+            //临时变量，分配寄存器
+            else{
+                newOprand = this->allocateRegister(varIndex);
+            }
+
+            //缓存起来
+            this->lowedVars.insert({varIndex, newOprand});
+        }
+    }
+
+    std::shared_ptr<Oprand> allocateRegister(uint32_t varIndex) {
+        for (auto& reg: Register::registers32){
+            auto it = this->allocatedRegisters.find(reg->name);
+            if (it == this->allocatedRegisters.end()){
+                this->allocatedRegisters.insert({reg->name, varIndex});
+
+                //更新usedCalleeProtectedRegs
+                if(std::find(Register::calleeProtected32.begin(), Register::calleeProtected32.end(), reg) !=
+                    Register::calleeProtected32.end()){
+                    this->usedCalleeProtectedRegs.push_back(reg);
+                }
+                //更新usedCallerProtectedRegs
+                else if (std::find(Register::callerProtected32.begin(), Register::callerProtected32.end(), reg) !=
+                    Register::callerProtected32.end()){
+                    this->usedCallerProtectedRegs.push_back(reg);
+                }
+                return reg;
+            }
+        }
+        //不应该执行到这里，执行到这里应该报错
+        dbg("Error: Unable to allocate a Register, the generated asm is not reliable");
+        return nullptr;
+    }
+
+    void reserveReturnSlot(){
+        //给予一个特殊的变量下标，-1
+        this->allocatedRegisters.insert({Register::eax()->name, UINT_MAX});
+    }
+
+    void freeRegister(std::shared_ptr<Oprand>& reg){
+        // auto it = this->allocatedRegisters.find(reg->name);
+        // if (it != this->allocatedRegisters.end())
+            // this->allocatedRegisters.erase(it);
+
+        // auto index = this->usedCalleeProtectedRegs.indexOf(reg);
+        // if (index != -1)
+            // this->usedCalleeProtectedRegs.splice(index,1);
+
+        // index = this->usedCallerProtectedRegs.indexOf(reg);
+        // if (index != -1)
+            // this->usedCallerProtectedRegs.splice(index,1);
     }
 
     void lowerInsts(const std::vector<std::shared_ptr<Inst>>& insts, std::vector<std::shared_ptr<Inst>>& newInsts) {
