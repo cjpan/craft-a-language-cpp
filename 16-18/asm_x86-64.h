@@ -207,12 +207,20 @@ public:
 class Inst{
 public:
     AsmOpCode op;
+
+    virtual bool isInst_0() { return false; };
+    virtual bool isInst_1() { return false; };
+    virtual bool isInst_2() { return false; };
+
     Inst(AsmOpCode op):op(op) {}
     virtual std::string toString() = 0;
 };
 
 class Inst_0: public Inst{
+public:
     Inst_0(AsmOpCode op): Inst(op) {}
+
+    bool isInst_0() { return true; };
 
     std::string toString() override {
         return ::toString(this->op);
@@ -224,6 +232,7 @@ public:
     std::shared_ptr<Oprand> oprand;
     Inst_1(AsmOpCode op, std::shared_ptr<Oprand>& oprand):Inst(op), oprand(oprand) {}
 
+    bool isInst_1() { return true; };
     std::string toString() override {
         return ::toString(this->op) + "\t" + this->oprand->toString();
     }
@@ -235,6 +244,8 @@ public:
     std::shared_ptr<Oprand> oprand1;
     std::shared_ptr<Oprand> oprand2;
     Inst_2(AsmOpCode op, std::shared_ptr<Oprand>& oprand1, std::shared_ptr<Oprand>& oprand2):Inst(op), oprand1(oprand1), oprand2(oprand2) {}
+
+    bool isInst_2() { return true; };
     std::string toString() override {
         return ::toString(this->op) + "\t" + this->oprand1->toString() + ", " + this->oprand2->toString();
     }
@@ -1092,19 +1103,176 @@ public:
     }
 
     void lowerInsts(const std::vector<std::shared_ptr<Inst>>& insts, std::vector<std::shared_ptr<Inst>>& newInsts) {
+        for (uint32_t i = 0; i < insts.size(); i++) {
+            auto inst = insts[i];
+            //两个操作数
+            if (inst->isInst_2()) {
+                auto inst_2 = std::dynamic_pointer_cast<Inst_2>(inst);
+                inst_2->oprand1 = this->lowerOprand(inst_2->oprand1);
+                inst_2->oprand2 = this->lowerOprand(inst_2->oprand2);
+                // 对mov再做一次优化
+                if (!(inst_2->op == AsmOpCode::movl && inst_2->oprand1 == inst_2->oprand2)) {
+                    newInsts.push_back(inst_2);
+                }
+            }
+            //1个操作数
+            else if (inst->isInst_1()) {
+                auto inst_1 = std::dynamic_pointer_cast<Inst_1>(inst);
+                inst_1->oprand = this->lowerOprand(inst_1->oprand);
+                //处理函数调用
+                //函数调用前后，要设置参数；
+                if (inst_1->op == AsmOpCode::callq) {
+                    this->lowerFunctionCall(inst_1, newInsts);
+                }
+                else {
+                    newInsts.push_back(inst_1);
+                }
+            }
+            //没有操作数
+            else {
+                newInsts.push_back(inst);
+            }
+        }
+    }
+
+    void lowerFunctionCall(std::shared_ptr<Inst_1>& inst_1, std::vector<std::shared_ptr<Inst>>& newInsts) {
 
     }
 
-    void addPrologue(std::vector<std::shared_ptr<Inst>>& newInsts) {
+    void addPrologue(std::vector<std::shared_ptr<Inst>>& insts) {
+        std::vector<std::shared_ptr<Inst>> newInsts;
+        //保存rbp的值
+        auto rbp = Register::rbp();
+        newInsts.push_back(std::make_shared<Inst_1>(AsmOpCode::pushq, rbp));
+        //把原来的栈顶保存到rbp,成为现在的栈底
+        auto rsp = Register::rsp();
+        newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::movq, rsp, rbp));
+        //把前6个参数存到栈桢里
+        int32_t paramsToSave = this->numParams > 6 ? 6 : this->numParams;
+        for (int32_t i = 0; i < paramsToSave; i++) {
+            int32_t offset = -(i + 1) * 4;
+            auto src = Register::paramRegisters32[i];
+            std::shared_ptr<Oprand> dst = std::make_shared<MemAddress>(rbp, offset);
+            newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, src, dst));
+        }
 
+        //计算栈顶指针需要移动多少位置
+        //要保证栈桢16字节对齐
+        if (!this->canUseRedZone) {
+            this->rspOffset = paramsToSave * 4 + this->numLocalVars * 4 + this->usedCallerProtectedRegs.size() * 4 + this->numArgsOnStack * 8 + 16;
+            //当前占用的栈空间，还要加上Callee保护的寄存器占据的空间
+            auto rem = (this->rspOffset + this->usedCalleeProtectedRegs.size() * 8) % 16;
+            // console.log("this->rspOffset="+this->rspOffset);
+            // console.log("rem="+rem);
+            if (rem == 8) {
+                this->rspOffset += 8;
+            }
+            else if (rem == 4) {
+                this->rspOffset += 12;
+            }
+            else if (rem == 12) {
+                this->rspOffset += 4;
+            }
+            // console.log("this->rspOffset="+this->rspOffset);
+            if (this->rspOffset > 0) {
+                auto op = std::make_shared<Oprand>(OprandKind::immediate, this->rspOffset);
+                newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::subq, op, rsp));
+            }
+
+        }
+
+        //保存Callee负责保护的寄存器
+        this->saveCalleeProtectedRegs(newInsts);
+        //合并原来的指令
+        insts.insert(insts.begin(), newInsts.begin(), newInsts.end());
     }
 
     void addEpilogue(std::vector<std::shared_ptr<Inst>>& newInsts) {
-
+        //恢复Callee负责保护的寄存器
+        this->restoreCalleeProtectedRegs(newInsts);
+        //缩小栈桢
+        if (!this->canUseRedZone && this->rspOffset > 0) {
+            auto src = std::make_shared<Oprand>(OprandKind::immediate, this->rspOffset);
+            auto dst = Register::rsp();
+            newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::addq, src, dst));
+        }
+        //恢复rbp的值
+        auto rbp = Register::rbp();
+        newInsts.push_back(std::make_shared<Inst_1>(AsmOpCode::popq, rbp));
+        //返回
+        newInsts.push_back(std::make_shared<Inst_0>(AsmOpCode::retq));
     }
 
     std::vector<std::shared_ptr<BasicBlock>> lowerBBLabelAndJumps(std::vector<std::shared_ptr<BasicBlock>>& bbs, int32_t funIndex) {
-        return {};
+        std::vector<std::shared_ptr<BasicBlock>> newBBs;
+        uint32_t bbIndex = 0;
+        //去除空的BasicBlock，并给BasicBlock编号
+        for (uint32_t i = 0; i < bbs.size(); i++) {
+            auto bb = bbs[i];
+            //如果是空的BasicBlock，就跳过
+            if (bb->insts.size() > 0) {
+                bb->funIndex = funIndex;
+                bb->bbIndex = bbIndex++;
+                newBBs.push_back(bb);
+            }
+            else {
+                //如果有一个BasicBlock指向该block，那么就指向下一个block;
+                // for (uint32_t j = 0; j < newBBs.size(); j++) {
+                    // auto lastInst = newBBs[j]->insts.back();
+                    // if (lastInst->op < AsmOpCode::sete) {
+                        // auto jumpInst = lastInst;
+                        // auto destBB = jumpInst->oprand.value;
+                        // if (destBB == bb) {
+                            // jumpInst.oprand.value = bbs[i + 1];
+                        // }
+                    // }
+                // }
+                dbg("Error: current not support jmp!");
+            }
+        }
+        //把jump指令的操作数lower一下,从BasicBlock变到标签
+        // for (uint32_t i = 0; i < newBBs.size(); i++) {
+            // auto& insts = newBBs[i]->insts;
+            // auto lastInst = insts.back();
+            // if (lastInst.op < 20) { //jump指令
+                // auto jumpInst = lastInst;
+                // let bbDest = jumpInst.oprand.value;
+                // jumpInst.oprand.value = bbDest.getName();
+                // bbDest.isDestination = true; //有其他block跳到这个block
+            // }
+        // }
+        return newBBs;
+    }
+
+
+    std::shared_ptr<Oprand> lowerOprand(std::shared_ptr<Oprand>& oprand) {
+        auto newOprand = oprand;
+        if (oprand->kind == OprandKind::varIndex) {
+            if (!isType<uint32_t>(oprand->value)) {
+                dbg("Error: OprandKind::varIndex value must uint32_t, but " + std::string(oprand->value.type().name()));
+            }
+            uint32_t varIndex = std::any_cast<uint32_t>(oprand->value);
+            auto iter = this->lowedVars.find(varIndex);
+            return iter->second;
+        }
+        else if (oprand->kind == OprandKind::returnSlot) {
+            newOprand = Register::eax();
+        }
+        return newOprand;
+    }
+
+    void saveCalleeProtectedRegs(std::vector<std::shared_ptr<Inst>>& newInsts) {
+        for (uint32_t i = 0; i  < this->usedCalleeProtectedRegs.size(); i++) {
+            auto reg64 = std::find(Register::calleeProtected32.begin(),Register::calleeProtected32.end(), this->usedCalleeProtectedRegs[i]);
+            newInsts.push_back(std::make_shared<Inst_1>(AsmOpCode::pushq, *reg64));
+        }
+    }
+
+    void restoreCalleeProtectedRegs(std::vector<std::shared_ptr<Inst>>& newInsts) {
+        for (int32_t i = this->usedCalleeProtectedRegs.size() - 1; i >= 0; i--) {
+            auto reg64 = std::find(Register::calleeProtected32.begin(),Register::calleeProtected32.end(), this->usedCalleeProtectedRegs[i]);
+            newInsts.push_back(std::make_shared<Inst_1>(AsmOpCode::popq, *reg64));
+        }
     }
 };
 
