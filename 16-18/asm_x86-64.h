@@ -1136,6 +1136,66 @@ public:
     }
 
     void lowerFunctionCall(std::shared_ptr<Inst_1>& inst_1, std::vector<std::shared_ptr<Inst>>& newInsts) {
+        auto functionOprand = std::dynamic_pointer_cast<FunctionOprand>(inst_1->oprand);
+        auto& args = functionOprand->args;
+        //需要在栈桢里为传参保留的空间
+        uint32_t numArgs = args.size();
+        if (numArgs > 6 && numArgs - 6 > this->numArgsOnStack) {
+            this->numArgsOnStack = numArgs - 6;
+        }
+        //保存Caller负责保护的寄存器
+        uint32_t paramsToSave = this->numParams > 6 ? 6 : this->numParams;
+        int32_t offset = -(paramsToSave + this->numLocalVars + 1) * 4;
+        std::vector<uint32_t> spilledTempVars;
+        std::vector<std::shared_ptr<Oprand>> spilledRegs;
+        for (uint32_t i = 0; i < this->usedCallerProtectedRegs.size(); i++) {
+            auto reg = this->usedCallerProtectedRegs[i];
+            auto rbp = Register::rbp();
+            std::shared_ptr<Oprand> op = std::make_shared<MemAddress>(rbp, offset - i * 4);
+            newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, reg, op));
+            auto varIndex = this->allocatedRegisters[reg->name];
+            spilledRegs.push_back(reg);
+            spilledTempVars.push_back(varIndex);
+        }
+
+        for (auto reg: spilledRegs) { //这个一定要单起一个循环
+            this->freeRegister(reg);
+        }
+
+        //把前6个参数设置到寄存器
+        for (uint32_t j = 0; j < numArgs && j < 6; j++) {
+            auto regSrc = this->lowerOprand(args[j]);
+            auto regDest = Register::paramRegisters32[j];
+            if (regDest != regSrc)
+                newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, regSrc, regDest));
+        }
+
+        //超过6个之后的参数是放在栈桢里的，并要移动栈顶指针
+        if (args.size() > 6) {
+            //参数是倒着排的。
+            //栈顶是参数7，再往上，依次是参数8、参数9...
+            //在Callee中，会到Caller的栈桢中去读取参数值
+            for (uint32_t j = 6; j < numArgs; j++) {
+                int32_t offset = (j - 6) * 8;
+                auto rsp = Register::rsp();
+                std::shared_ptr<Oprand> op = std::make_shared<MemAddress>(rsp, offset);
+                newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, functionOprand->args[j], op));
+            }
+        }
+
+        //调用函数，修改操作数为functionName
+        newInsts.push_back(inst_1);
+        //为返回值预留eax寄存器
+        this->reserveReturnSlot();
+        //恢复Caller负责保护的寄存器
+        for (uint32_t i = 0; i < spilledTempVars.size(); i++) {
+            uint32_t varIndex = spilledTempVars[i];
+            auto reg = this->allocateRegister(varIndex);
+            auto rbp = Register::rbp();
+            std::shared_ptr<Oprand> op = std::make_shared<MemAddress>(rbp, offset - i * 4);
+            newInsts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, op, reg));
+            this->lowedVars.insert({varIndex, reg});
+        }
 
     }
 
