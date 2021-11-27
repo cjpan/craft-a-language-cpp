@@ -909,7 +909,7 @@ class MemAddress: public Oprand{
 public:
     std::shared_ptr<Oprand> regist;
     int32_t offset;
-    MemAddress(std::shared_ptr<Oprand>& regist, int32_t offset): Oprand(OprandKind::memory, "undefined"), offset(offset) {}
+    MemAddress(std::shared_ptr<Oprand>& regist, int32_t offset): Oprand(OprandKind::memory, "undefined"), regist(regist), offset(offset) {}
     std::string toString() override {
         //输出结果类似于：8(%rbp)
         //如果offset为0，那么不显示，即：(%rbp)

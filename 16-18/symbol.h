@@ -98,7 +98,7 @@ public:
         return ptr->paramTypes.size();
     }
 
-    int32_t getVarIndex(const std::string& varName) {
+    uint32_t getVarIndex(const std::string& varName) {
         auto compare = [&varName](const std::shared_ptr<Symbol> & var) {
             return var->name == varName;
         };

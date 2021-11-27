@@ -264,19 +264,16 @@ std::string compileToAsm(AstNode& node, bool verbose){
         Print(asmModule->toString());
     }
 
-    /*
-    //Lower
-    let lower = new Lower(asmModule);
-    lower.lowerModule();
 
-    let asm = asmModule.toString();
+    //Lower
+    auto lower = std::make_shared<Lower>(asmModule);
+    lower->lowerModule();
+
+    auto asmStr = asmModule->toString();
     if (verbose){
-        console.log("在Lower之后：");
-        console.log(asm);
+        dbg("after Lower:");
+        Print(asmStr);
     }
 
-    return asm;
-    */
-
-    return "";
+    return asmStr;
 }
