@@ -89,3 +89,64 @@ println(i);
 
     auto asmStr = compileToAsm(*ast);
 }
+
+TEST(ASM, Program)
+{
+    std::string expect =
+R"(Prog
+    FunctionDecl fourTimes
+        Return type: number
+            ParamList:
+                VariableDecl r(number)
+                no initialization.
+            VariableStatement
+                VariableDecl area(number)
+                    Binary:Multiply
+                        4(integer)
+                        Variable: r, resolved
+            ReturnStatement
+                Variable: area, resolved
+    ExpressionStatement
+        FunctionCall println, built-in
+            FunctionCall fourTimes, resolved
+                4(integer)
+    ReturnStatement
+)";
+
+    std::string program =
+R"(
+function fourTimes(r : number):number{
+    let area : number = 4*r;
+    return area;
+}
+
+println(fourTimes(4));
+)";
+
+    CharStream charStream(program);
+    Scanner scanner(charStream);
+
+    auto parser = Parser(scanner);
+    auto ast = parser.parseProg();
+
+    auto dumper = AstDumper();
+    dumper.visit(*ast, "");
+
+    SemanticAnalyer semanticAnalyer;
+    semanticAnalyer.execute(*ast);
+
+    dumper.clearString();
+    dumper.visit(*ast, "");
+    auto str = dumper.toString();
+    EXPECT_STREQ(expect.c_str(), str.c_str());
+
+    auto scopeDumper = ScopeDumper();
+    scopeDumper.visit(*ast, "");
+
+    EXPECT_STREQ(expect.c_str(), str.c_str());
+
+    auto interpretor = Interpretor();
+    interpretor.visit(*ast, "");
+
+    auto asmStr = compileToAsm(*ast);
+}
