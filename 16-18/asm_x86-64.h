@@ -465,7 +465,7 @@ public:
         return this->asmModule;
     }
 
-    /*
+
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
         if(variableDecl.init != nullptr && this->s->functionSym != nullptr){
             auto r = this->visit(*variableDecl.init);
@@ -495,8 +495,9 @@ public:
             return left;
         }
         return std::any();
-    }*/
+    }
 
+    /*
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
         if(this->s->functionSym !=nullptr){
             std::shared_ptr<Oprand> right;
@@ -524,7 +525,7 @@ public:
 
         return std::any();
     }
-
+    */
     std::any visitVariable(Variable& variable, std::string prefix) override {
         if (this->s->functionSym !=nullptr && variable.sym != nullptr){
             return std::make_shared<Oprand>(OprandKind::varIndex, this->s->functionSym->getVarIndex(variable.sym->name));
