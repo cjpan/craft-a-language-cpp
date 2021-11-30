@@ -133,6 +133,10 @@ enum class AsmOpCode{
     pushb,
     popb,
     cmpb,
+
+    //伪指令
+    declVar,   //变量声明
+    reload,    //重新装载被溢出到内存的变量到寄存器
 };
 
 /**
@@ -159,6 +163,17 @@ enum class OprandKind{
 
 std::string toString(AsmOpCode op);
 std::string toString(OprandKind kind);
+
+class OpCodeHelper{
+public:
+    static bool isReturn(AsmOpCode op){
+        return op == AsmOpCode::retb || op == AsmOpCode::retw || op == AsmOpCode::retl ||  op == AsmOpCode::retq;
+    }
+
+    static bool isJump(AsmOpCode op){
+        return op < AsmOpCode::sete;
+    }
+};
 
 class Oprand {
 public:
@@ -207,18 +222,22 @@ public:
 class Inst{
 public:
     AsmOpCode op;
+    uint32_t numOprands;
+    static uint32_t index;
 
     virtual bool isInst_0() { return false; };
     virtual bool isInst_1() { return false; };
     virtual bool isInst_2() { return false; };
 
-    Inst(AsmOpCode op):op(op) {}
+    Inst(AsmOpCode op, uint32_t numOprands):op(op), numOprands(numOprands) {
+        index++;
+    }
     virtual std::string toString() = 0;
 };
 
 class Inst_0: public Inst{
 public:
-    Inst_0(AsmOpCode op): Inst(op) {}
+    Inst_0(AsmOpCode op): Inst(op, 0) {}
 
     bool isInst_0() { return true; };
 
@@ -230,7 +249,7 @@ public:
 class Inst_1: public Inst{
 public:
     std::shared_ptr<Oprand> oprand;
-    Inst_1(AsmOpCode op, std::shared_ptr<Oprand>& oprand):Inst(op), oprand(oprand) {}
+    Inst_1(AsmOpCode op, std::shared_ptr<Oprand>& oprand):Inst(op, 1), oprand(oprand) {}
 
     bool isInst_1() { return true; };
     std::string toString() override {
@@ -243,7 +262,7 @@ class Inst_2: public Inst {
 public:
     std::shared_ptr<Oprand> oprand1;
     std::shared_ptr<Oprand> oprand2;
-    Inst_2(AsmOpCode op, std::shared_ptr<Oprand>& oprand1, std::shared_ptr<Oprand>& oprand2):Inst(op), oprand1(oprand1), oprand2(oprand2) {}
+    Inst_2(AsmOpCode op, std::shared_ptr<Oprand>& oprand1, std::shared_ptr<Oprand>& oprand2):Inst(op, 2), oprand1(oprand1), oprand2(oprand2) {}
 
     bool isInst_2() { return true; };
     std::string toString() override {

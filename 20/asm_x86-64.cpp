@@ -106,6 +106,10 @@ std::map<AsmOpCode, std::string> asmOpCodeToString {
     {AsmOpCode::popb   ,"popb"},
     {AsmOpCode::cmpb   ,"cmpb"},
 
+    //伪指令
+    {AsmOpCode::declVar   ,"declVar"},
+    {AsmOpCode::reload   ,"reload"},
+
 };
 
 std::map<OprandKind, std::string> oprandKindToString {
@@ -124,6 +128,7 @@ std::map<OprandKind, std::string> oprandKindToString {
 
 };
 
+uint32_t Inst::index;
 
 std::string toString(AsmOpCode op) {
     auto iter = asmOpCodeToString.find(op);
