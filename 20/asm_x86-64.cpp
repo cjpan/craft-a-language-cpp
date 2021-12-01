@@ -152,7 +152,6 @@ const uint32_t Register::numAvailableRegs = 13;
 
 //32位寄存器
 std::vector<std::shared_ptr<Oprand>> Register::registers32 {
-    Register::eax(),
 
     Register::r10d(),
     Register::r11d(),
@@ -163,6 +162,8 @@ std::vector<std::shared_ptr<Oprand>> Register::registers32 {
     Register::ecx(),
     Register::r8d(),
     Register::r9d(),
+
+    Register::eax(),
 
     Register::ebx(),
     Register::r12d(),

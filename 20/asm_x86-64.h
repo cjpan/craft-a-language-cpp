@@ -154,6 +154,7 @@ enum class OprandKind{
     regist,       //物理寄存器
     memory,         //内存访问
     immediate,      //立即数
+    label,          //标签，从bb类型的操作数Lower而成
 
     //cmp指令的结果，是设置寄存器的标志位
     //后面可以根据flag和比较操作符的类型，来确定后续要生成的代码
@@ -198,6 +199,12 @@ public:
         else if (this->kind == OprandKind::returnSlot){
                 return "returnSlot";
         }
+        else if (this->kind == OprandKind::label){
+                return "label";
+        }
+        else if (this->kind == OprandKind::varIndex){
+                return "varIndex";
+        }
         else{
             return ::toString(this->kind) + "(" + value2String() + ")";
         }
@@ -224,6 +231,7 @@ public:
     AsmOpCode op;
     uint32_t numOprands;
     static uint32_t index;
+    std::string comment;
 
     virtual bool isInst_0() { return false; };
     virtual bool isInst_1() { return false; };
@@ -233,6 +241,19 @@ public:
         index++;
     }
     virtual std::string toString() = 0;
+    virtual std::string patchComments(std::string& str) {
+        if(!this->comment.empty()){
+            if (str.size() < 11)
+                str += "\t\t\t";
+            else if (str.size() < 19)
+                str += "\t\t";
+            else if (str.size() < 21)
+                str += "\t";
+
+            str += (this->comment.empty() ? "" : ("\t\t#  " + this->comment));
+        }
+        return str;
+    }
 };
 
 class Inst_0: public Inst{
@@ -242,7 +263,8 @@ public:
     bool isInst_0() { return true; };
 
     std::string toString() override {
-        return ::toString(this->op);
+        auto str = ::toString(this->op);
+        return this->patchComments(str);
     }
 };
 
@@ -253,7 +275,8 @@ public:
 
     bool isInst_1() { return true; };
     std::string toString() override {
-        return ::toString(this->op) + "\t" + this->oprand->toString();
+        auto str = ::toString(this->op) + "\t" + this->oprand->toString();
+        return this->patchComments(str);
     }
 
 };
@@ -266,7 +289,8 @@ public:
 
     bool isInst_2() { return true; };
     std::string toString() override {
-        return ::toString(this->op) + "\t" + this->oprand1->toString() + ", " + this->oprand2->toString();
+        auto str = ::toString(this->op) + "\t" + this->oprand1->toString() + ", " + this->oprand2->toString();
+        return this->patchComments(str);
     }
 };
 
@@ -295,6 +319,9 @@ public:
     std::string getName() {
         if (this->bbIndex != -1 && this->funIndex != -1){
             return "LBB" + std::to_string(this->funIndex) + "_" + std::to_string(this->bbIndex);
+        }
+        else if (this->bbIndex != -1){
+            return "LBB" + std::to_string(this->bbIndex);
         }
         else{
             return "LBB";
@@ -367,9 +394,6 @@ struct TempStates{
     //下一个临时变量的下标
     uint32_t nextTempVarIndex {0};
 
-    //已经不再使用的临时变量，可以被复用
-    //优先使用返回值寄存器，可以减少寄存器之间的拷贝
-    std::vector<uint32_t> deadTempVars;
 
     //每个表达式节点对应的临时变量的索引
     // tempVarMap:Map<Expression, number> = new Map();
@@ -379,6 +403,9 @@ struct TempStates{
 
     //保存一元后缀运算符对应的指令。
     // postfixUnaryInst:Inst_1|null = null;
+
+    //当前的BasicBlock编号
+    uint32_t blockIndex {0};
 };
 
 
@@ -413,32 +440,19 @@ public:
         return std::any_cast<std::shared_ptr<Oprand>>(val);
     }
 
-    uint32_t allocateTempVar() {
-        uint32_t varIndex = 0;
-        if (this->s->deadTempVars.size() >0){
-            varIndex = this->s->deadTempVars.back();
-            this->s->deadTempVars.pop_back();
-        }
-        else{
-            varIndex = this->s->nextTempVarIndex++;
-        }
-        return varIndex;
+    std::shared_ptr<Oprand> allocateTempVar() {
+        uint32_t varIndex = this->s->nextTempVarIndex++;
+        auto oprand = std::make_shared<Oprand>(OprandKind::varIndex, varIndex);
+        //这里要添加一个变量声明
+        auto inst = std::make_shared<Inst_1>(AsmOpCode::declVar,oprand);
+        this->getCurrentBB()->insts.push_back(inst);
+        return oprand;
     }
 
     bool isTempVar(std::shared_ptr<Oprand>& oprand) {
         if (oprand != nullptr && this->s->functionSym!= nullptr){
             return oprand->kind == OprandKind::varIndex && isType<uint32_t>(oprand->value) &&
                 std::any_cast<uint32_t>(oprand->value) >= this->s->functionSym->vars.size();
-        }
-        else{
-            return false;
-        }
-    }
-
-    bool isParamOrLocalVar(std::shared_ptr<Oprand>& oprand) {
-        if (this->s->functionSym != nullptr){
-            return oprand->kind == OprandKind::varIndex && isType<uint32_t>(oprand->value) &&
-                std::any_cast<uint32_t>(oprand->value) < this->s->functionSym->vars.size();
         }
         else{
             return false;
@@ -463,12 +477,16 @@ public:
 
     std::shared_ptr<BasicBlock> newBlock(){
         auto bb = std::make_shared<BasicBlock>();
+        bb->bbIndex = this->s->blockIndex++;
         this->s->bbs.push_back(bb);
 
         return bb;
     }
 
     std::any visitProg(Prog& prog, std::string prefix) override {
+        //设置一些状态变量
+        this->asmModule = std::make_shared<AsmModule>();
+
         this->s->functionSym = prog.sym;
         this->s->nextTempVarIndex = this->s->functionSym->vars.size();
 
@@ -481,10 +499,14 @@ public:
         this->asmModule->numVars.insert({this->s->functionSym->name, this->s->functionSym->vars.size()});
         this->asmModule->numTotalVars.insert({this->s->functionSym->name, this->s->nextTempVarIndex});
 
+
+        //重新设置状态变量
+        this->s = std::make_shared<TempStates>();
+
         return this->asmModule;
     }
 
-
+    /*
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
         if(variableDecl.init != nullptr && this->s->functionSym != nullptr){
             auto r = this->visit(*variableDecl.init);
@@ -510,13 +532,14 @@ public:
                 }
                 right = newRight;
             }
+
             this->movIfNotSame(right, left);
             return left;
         }
         return std::any();
     }
+    */
 
-    /*
     std::any visitVariableDecl(VariableDecl& variableDecl, std::string prefix) override {
         if(this->s->functionSym !=nullptr){
             std::shared_ptr<Oprand> right;
@@ -544,7 +567,7 @@ public:
 
         return std::any();
     }
-    */
+
     std::any visitVariable(Variable& variable, std::string prefix) override {
         if (this->s->functionSym !=nullptr && variable.sym != nullptr){
             return std::make_shared<Oprand>(OprandKind::varIndex, this->s->functionSym->getVarIndex(variable.sym->name));
@@ -625,15 +648,19 @@ public:
         insts.push_back(std::make_shared<Inst_1>(AsmOpCode::callq, op));
 
         //把结果放到一个新的临时变量里
+        std::shared_ptr<Oprand> dest;
         if(functionType->returnType != SysTypes::Void()) { //函数有返回值时
-            auto dest = std::make_shared<Oprand>(OprandKind::varIndex, this->allocateTempVar());
+            dest = this->allocateTempVar();
             insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, this->returnSlot, dest));
-            return dest;
         }
 
         dbg("--------- inst.size " + std::to_string(insts.size()));
 
-        return std::any();
+        //调用函数完毕以后，要重新装载被Spilled的变量
+        //这个动作要在获取返回值之后
+        insts.push_back(std::make_shared<Inst_0>(AsmOpCode::reload));
+
+        return dest;
     }
 
     std::any visitBinary(Binary& bi, std::string prefix) override {
@@ -661,16 +688,13 @@ public:
 
         //计算出一个目标操作数
         auto dest = left;
-
-        if (!this->isTempVar(dest)){
-            dest = std::make_shared<Oprand>(OprandKind::varIndex, this->allocateTempVar());
-            insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, left, dest));
+        if (bi.op == Op::Plus || bi.op == Op::Minus || bi.op == Op::Multiply || bi.op == Op::Divide) {
+            if (!this->isTempVar(dest)){
+                dest = this->allocateTempVar();
+                insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl, left, dest));
+            }
         }
 
-        //释放掉不用的临时变量
-        if (this->isTempVar(right)){
-            this->s->deadTempVars.push_back(std::any_cast<uint32_t>(right->value));
-        }
 
         //生成指令
         //todo 有问题的地方
@@ -702,9 +726,9 @@ public:
                 insts.push_back(std::make_shared<Inst_2>(AsmOpCode::idivl,right, dest));
                 break;
             case Op::Assign: //'='
-                // this->movIfNotSame(right,left);
-                insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl,right, dest));
-                this->movIfNotSame(dest,left);    //写到内存里去
+                this->movIfNotSame(right, dest);
+                // insts.push_back(std::make_shared<Inst_2>(AsmOpCode::movl,right, dest));
+                // this->movIfNotSame(dest,left);    //写到内存里去
                 break;
             case Op::G:
             case Op::L:
