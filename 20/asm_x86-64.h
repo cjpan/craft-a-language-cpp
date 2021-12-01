@@ -345,6 +345,14 @@ public:
     }
 };
 
+/**
+ * 变量活跃性分析的结果
+ */
+struct LivenessResult {
+    std::map<std::shared_ptr<Inst>, std::vector<uint32_t>> liveVars;
+    std::map<std::shared_ptr<BasicBlock>, std::vector<uint32_t>> initialVars;
+};
+
 class AsmModule{
 public:
     //每个函数对应的指令数组
@@ -1341,7 +1349,7 @@ public:
             // if (lastInst.op < 20) { //jump指令
                 // auto jumpInst = lastInst;
                 // let bbDest = jumpInst.oprand.value;
-                // jumpInst.oprand.value = bbDest.getName();
+                // jumpInst.oprand.value = bbDest->getName();
                 // bbDest.isDestination = true; //有其他block跳到这个block
             // }
         // }
@@ -1380,7 +1388,93 @@ public:
     }
 };
 
+/**
+ * 控制流图
+ */
+class CFG{
+public:
+    //基本块的列表。第一个和最后一个BasicBlock是图的root。
+    std::vector<std::shared_ptr<BasicBlock>> bbs;
 
+    //每个BasicBlock输出的边
+    std::map<std::shared_ptr<BasicBlock>, std::vector<std::shared_ptr<BasicBlock>>> edgesOut;
+
+    //每个BasicBlock输入的边
+    std::map<std::shared_ptr<BasicBlock>, std::vector<std::shared_ptr<BasicBlock>>> edgesIn;
+
+    CFG(std::vector<std::shared_ptr<BasicBlock>>& bbs): bbs(bbs) {
+        this->buildCFG();
+    }
+
+    void buildCFG(){
+/*
+        //构建edgesOut;
+        for (let i:number = 0; i < this->bbs.length-1; i++){ //最后一个基本块不用分析
+            let bb = this->bbs[i];
+            let toBBs:BasicBlock[] = [];
+            this->edgesOut.set(bb,toBBs);
+            let lastInst = bb.insts[bb.insts.length -1];
+            if (OpCodeHelper.isJump(lastInst.op)){
+                let jumpInst = lastInst as Inst_1;
+                let destBB = jumpInst.oprand.value as BasicBlock;
+                toBBs.push(destBB);
+                //如果是条件分枝，那么还要加上下面紧挨着的BasicBlock
+                if (jumpInst.op != OpCode.jmp){
+                    toBBs.push(this->bbs[i+1]);
+                }
+            }
+            else{ //如果最后一条语句不是跳转语句，则连接到下一个BB
+                toBBs.push(this->bbs[i+1]);
+            }
+
+        }
+
+        //构建反向的边:edgesIn
+        for (let bb of this->edgesOut.keys()){
+            let toBBs = this->edgesOut.get(bb) as BasicBlock[];
+            for (let toBB of toBBs){
+                let fromBBs = this->edgesIn.get(toBB);
+                if (typeof fromBBs == 'undefined'){
+                    fromBBs = [];
+                    this->edgesIn.set(toBB, fromBBs);
+                }
+                fromBBs.push(bb);
+            }
+        }
+*/
+    }
+
+    std::string toString() {
+        std::string str;
+        str += "bbs:\n";
+        for (auto& bb: this->bbs){
+            str += "\t" + bb->getName() + "\n";
+        }
+
+        str += "edgesOut:\n";
+        for (auto& item: this->edgesOut){
+            auto& bb = item.first;
+            auto& toBBs = item.second;
+
+            str += "\t" + bb->getName()+"->\n";
+            for (auto& bb2: toBBs){
+                str += "\t\t" + bb2->getName() + "\n";
+            }
+        }
+
+        str += "edgesIn:\n";
+        for (auto& item: this->edgesIn){
+            auto& bb = item.first;
+            auto& fromBBs = item.second;
+
+            str += "\t"+bb->getName()+"<-\n";
+            for (auto& bb2: fromBBs){
+                str += "\t\t" + bb2->getName() + "\n";
+            }
+        }
+        return str;
+    }
+};
 
 
 std::string compileToAsm(AstNode& node, bool verbose = true);
