@@ -1407,41 +1407,42 @@ public:
     }
 
     void buildCFG(){
-/*
+
         //构建edgesOut;
-        for (let i:number = 0; i < this->bbs.length-1; i++){ //最后一个基本块不用分析
-            let bb = this->bbs[i];
-            let toBBs:BasicBlock[] = [];
-            this->edgesOut.set(bb,toBBs);
-            let lastInst = bb.insts[bb.insts.length -1];
-            if (OpCodeHelper.isJump(lastInst.op)){
-                let jumpInst = lastInst as Inst_1;
-                let destBB = jumpInst.oprand.value as BasicBlock;
-                toBBs.push(destBB);
+        for (int32_t i = 0; i < static_cast<int32_t>(this->bbs.size()) - 1; i++){ //最后一个基本块不用分析
+            auto bb = this->bbs[i];
+            auto next = (i + 1 == static_cast<int32_t>(this->bbs.size())) ? nullptr : this->bbs[i+1];
+
+            std::vector<std::shared_ptr<BasicBlock>> toBBs;
+
+            this->edgesOut.insert({bb, toBBs});
+            auto lastInst = bb->insts.back();
+            if (OpCodeHelper::isJump(lastInst->op)){
+                auto jumpInst = std::dynamic_pointer_cast<Inst_1>(lastInst);
+                auto destBB = std::any_cast<std::shared_ptr<BasicBlock>>(jumpInst->oprand->value);
+                toBBs.push_back(destBB);
                 //如果是条件分枝，那么还要加上下面紧挨着的BasicBlock
-                if (jumpInst.op != OpCode.jmp){
-                    toBBs.push(this->bbs[i+1]);
+                if (jumpInst->op != AsmOpCode::jmp){
+                    toBBs.push_back(next);
                 }
             }
             else{ //如果最后一条语句不是跳转语句，则连接到下一个BB
-                toBBs.push(this->bbs[i+1]);
+                toBBs.push_back(next);
             }
 
         }
+
 
         //构建反向的边:edgesIn
-        for (let bb of this->edgesOut.keys()){
-            let toBBs = this->edgesOut.get(bb) as BasicBlock[];
-            for (let toBB of toBBs){
-                let fromBBs = this->edgesIn.get(toBB);
-                if (typeof fromBBs == 'undefined'){
-                    fromBBs = [];
-                    this->edgesIn.set(toBB, fromBBs);
-                }
-                fromBBs.push(bb);
+        for (const auto& item: this->edgesOut){
+            const auto& bb = item.first;
+            const auto& toBBs = item.second;
+            for (auto& toBB: toBBs){
+                auto& fromBBs = this->edgesIn[toBB];
+                fromBBs.push_back(bb);
             }
         }
-*/
+
     }
 
     std::string toString() {
@@ -1476,6 +1477,28 @@ public:
     }
 };
 
+
+class LivenessAnalyzer{
+    std::shared_ptr<AsmModule> asmModule;
+
+    LivenessAnalyzer(std::shared_ptr<AsmModule>& asmModule): asmModule(asmModule) {}
+
+    std::shared_ptr<LivenessResult> execute() {
+        auto result = std::make_shared<LivenessResult>();
+
+        for (auto& item: this->asmModule->fun2Code){
+            auto& bbs = item.second;
+            this->analyzeFunction(bbs, result);
+        }
+
+        return result;
+    }
+
+    void analyzeFunction(std::vector<std::shared_ptr<BasicBlock>>& bbs, std::shared_ptr<LivenessResult>& result) {
+
+    }
+
+};
 
 std::string compileToAsm(AstNode& node, bool verbose = true);
 
