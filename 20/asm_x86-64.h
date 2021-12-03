@@ -1504,6 +1504,38 @@ public:
             result->initialVars[bb].insert({});
         }
 
+        //持续遍历图，直到没有BasicBlock的活跃变量需要被更新
+        std::set<std::shared_ptr<BasicBlock>> bbsToDo;
+        bbsToDo.insert(bbs.front());
+        while (!bbsToDo.empty()){
+            auto bb = *(bbsToDo.begin());
+            bbsToDo.erase(bb);
+            this->analyzeBasicBlock(bb, result);
+            //取出第一行的活跃变量集合，作为对前面的BasicBlock的输入
+            std::set<uint32_t> liveVars;
+            if (!bb->insts.empty()) {
+                liveVars = result->liveVars[bb->insts.front()];
+            }
+
+
+            auto fromBBs = cfg->edgesIn.find(bb);
+            if (fromBBs != cfg->edgesIn.end()){
+                for (auto& bb2: fromBBs->second){
+                    auto liveVars2 = result->initialVars[bb2];
+                    //如果能向上面的BB提供不同的活跃变量，则需要重新分析bb2
+                    if (!this->isSubsetOf(liveVars, liveVars2)){
+                        if (bbsToDo.find(bb2) == bbsToDo.end()) {
+                            bbsToDo.insert(bb2);
+                        }
+
+                        auto unionVars = this->unionOf(liveVars, liveVars2);
+                        result->initialVars.insert({bb2, unionVars});
+                    }
+                }
+            }
+
+        }
+
     }
 
 
