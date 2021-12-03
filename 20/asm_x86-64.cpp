@@ -271,6 +271,10 @@ std::string compileToAsm(AstNode& node, bool verbose){
     }
 
 
+    //变量活跃性分析
+    auto livenessAnalyzer = std::make_shared<LivenessAnalyzer>(asmModule);
+    auto result = livenessAnalyzer->execute();
+
     //Lower
     auto lower = std::make_shared<Lower>(asmModule);
     lower->lowerModule();

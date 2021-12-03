@@ -24,7 +24,7 @@
 #include <type_traits>
 #include <mutex>
 #include <optional>
-#include<climits>
+#include <climits>
 
 /**
  * 指令的编码
@@ -349,8 +349,8 @@ public:
  * 变量活跃性分析的结果
  */
 struct LivenessResult {
-    std::map<std::shared_ptr<Inst>, std::vector<uint32_t>> liveVars;
-    std::map<std::shared_ptr<BasicBlock>, std::vector<uint32_t>> initialVars;
+    std::map<std::shared_ptr<Inst>, std::set<uint32_t>> liveVars;
+    std::map<std::shared_ptr<BasicBlock>, std::set<uint32_t>> initialVars;
 };
 
 class AsmModule{
@@ -1479,6 +1479,7 @@ public:
 
 
 class LivenessAnalyzer{
+public:
     std::shared_ptr<AsmModule> asmModule;
 
     LivenessAnalyzer(std::shared_ptr<AsmModule>& asmModule): asmModule(asmModule) {}
@@ -1495,9 +1496,120 @@ class LivenessAnalyzer{
     }
 
     void analyzeFunction(std::vector<std::shared_ptr<BasicBlock>>& bbs, std::shared_ptr<LivenessResult>& result) {
+        auto cfg = std::make_shared<CFG>(bbs);
+        Print(cfg->toString());
+
+        //做一些初始化工作
+        for (auto& bb: bbs){
+            result->initialVars[bb].insert({});
+        }
 
     }
 
+
+    /**
+     * 给基本块做活跃性分析。
+     * 算法：从基本块的最后一条指令倒着做分析。
+     * @param bb
+     * @param result
+     */
+    bool analyzeBasicBlock(std::shared_ptr<BasicBlock>& bb, std::shared_ptr<LivenessResult>& result) {
+        bool changed = false;
+
+        //找出BasicBlock初始的集合
+        auto vars = result->initialVars[bb];  //克隆一份
+
+        //为每一条指令计算活跃变量集合
+        for (auto it = bb->insts.rbegin(); it != bb->insts.rend(); ++it){
+            auto inst = *it;
+            if (inst->numOprands == 1){
+                auto inst_1 = std::dynamic_pointer_cast<Inst_1>(inst);
+                //变量声明伪指令，从liveVars集合中去掉该变量
+                if (inst_1->op == AsmOpCode::declVar){
+                    if (!isType<uint32_t>(inst_1->oprand->value)) {
+                        dbg("Error: analyzeBasicBlock expect uint32_t, but " + std::string(inst_1->oprand->value.type().name()));
+                        return false;
+                    }
+
+                    uint32_t varIndex = std::any_cast<uint32_t>(inst_1->oprand->value);
+                    auto iter = vars.find(varIndex);
+                    if (iter != vars.end()) {
+                        vars.erase(iter);
+                    }
+                }
+                //查看指令中引用了哪个变量，就加到liveVars集合中去
+                else{
+                    this->updateLiveVars(inst, inst_1->oprand, vars);
+                }
+            }
+            else if (inst->numOprands == 2){
+                auto inst_2 = std::dynamic_pointer_cast<Inst_2>(inst);
+                this->updateLiveVars(inst, inst_2->oprand1, vars);
+                this->updateLiveVars(inst, inst_2->oprand2, vars);
+            }
+
+            result->liveVars.insert({inst, vars});
+            //vars 重复利用，用于下一条指令
+        }
+
+        return changed;
+    }
+
+    /**
+     * set1是不是set2的子集
+     * @param set1
+     * @param set2
+     */
+    bool isSubsetOf(const std::set<uint32_t>& set1, const std::set<uint32_t> set2) {
+        if(set1.size() <= set2.size()){
+            for (auto n:  set1){
+                if (set2.find(n) == set2.end()){
+                    return false;
+                }
+            }
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    /**
+     * 返回set1和set2的并集
+     * @param set1
+     * @param set2
+     */
+    std::set<uint32_t> unionOf(const std::set<uint32_t>& set1, const std::set<uint32_t>& set2) {
+        std::set<uint32_t> result;
+        std::set_union(set1.begin(), set1.end(), set2.begin(), set2.end(), std::inserter(result, result.begin()));
+        return result;
+    }
+
+    /**
+     * 把操作数用到的变量增加到当前指令的活跃变量集合里面。
+     * @param inst
+     * @param oprand
+     * @param vars
+     */
+    void updateLiveVars(std::shared_ptr<Inst>& inst, std::shared_ptr<Oprand>& oprand, std::set<uint32_t>& vars){
+        if (oprand->kind == OprandKind::varIndex){
+            if (!isType<uint32_t>(oprand->value)) {
+                dbg("Error: updateLiveVars expect uint32_t, but " + std::string(oprand->value.type().name()));
+                return;
+            }
+
+            uint32_t varIndex = std::any_cast<uint32_t>(oprand->value);
+            if (vars.find(varIndex)== vars.end()){
+                vars.insert(varIndex);
+            }
+        }
+        else if (oprand->kind == OprandKind::function){
+            auto functionOprand = std::dynamic_pointer_cast<FunctionOprand>(oprand);
+            for (auto& arg: functionOprand->args){
+                this->updateLiveVars(inst, arg, vars);
+            }
+        }
+    }
 };
 
 std::string compileToAsm(AstNode& node, bool verbose = true);
