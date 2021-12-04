@@ -6,6 +6,9 @@
 #include <any>
 #include <vector>
 
+#include <iostream>
+#include <sstream>
+
 enum class Color {
     Reset,
     Red,
@@ -126,6 +129,26 @@ std::any NEIntInt(const std::any& l, const std::any& r) {
 
 std::string Print(const std::string& str, Color color = Color::Red);
 std::string PrintHex(const std::vector<uint8_t>& byteCode, Color color = Color::Red);
+
+template<typename T>
+std::string PrintSeq(const T& seq, Color color = Color::Red) {
+    std::stringstream os;
+    os << "[";
+    bool start = true;
+    for(const auto& elem: seq){
+        if (start) {
+            start = false;
+        } else {
+            os << " ";
+        }
+
+        os << elem;
+    }
+    os << "]";
+
+    std::string str = os.str();
+    return Print(str, color);
+}
 
 void PrintAny(const std::any& a);
 #endif

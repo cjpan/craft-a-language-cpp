@@ -275,6 +275,25 @@ std::string compileToAsm(AstNode& node, bool verbose){
     auto livenessAnalyzer = std::make_shared<LivenessAnalyzer>(asmModule);
     auto result = livenessAnalyzer->execute();
 
+    if (verbose) {
+        dbg("liveVars");
+        for (auto& item: asmModule->fun2Code) {
+            auto funcName = item.first;
+            auto& bbs = item.second;
+            dbg("\nfunction: " + funcName);
+
+            for (auto& bb: bbs){
+                dbg("\nbb:" + bb->getName());
+                for (auto& inst: bb->insts){
+                    auto vars = result->liveVars[inst];
+                    PrintSeq(vars);
+                    dbg(inst->toString());
+                }
+                PrintSeq(result->initialVars[bb]);
+            }
+        }
+    }
+
     //Lower
     auto lower = std::make_shared<Lower>(asmModule);
     lower->lowerModule();
