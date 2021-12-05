@@ -21,6 +21,8 @@ R"(Prog
     std::string program = R"(
 let i = 1;
 )";
+    Print(program, Color::Blue);
+
     CharStream charStream(program);
     Scanner scanner(charStream);
 
@@ -64,6 +66,9 @@ R"(Prog
 let i = 1;
 println(i);
 )";
+
+    Print(program, Color::Blue);
+
     CharStream charStream(program);
     Scanner scanner(charStream);
 
@@ -122,6 +127,8 @@ function fourTimes(r : number):number{
 
 println(fourTimes(4));
 )";
+
+    Print(program, Color::Blue);
 
     CharStream charStream(program);
     Scanner scanner(charStream);
