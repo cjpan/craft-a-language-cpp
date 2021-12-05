@@ -563,7 +563,7 @@ public:
             auto left = std::make_shared<Oprand>(OprandKind::varIndex, varIndex);
 
             //插入一条抽象指令，代表这里声明了一个变量
-            this->getCurrentBB()->insts.push_back(std::make_shared<Inst_1>(AsmOpCode::decl, left));
+            this->getCurrentBB()->insts.push_back(std::make_shared<Inst_1>(AsmOpCode::declVar, left));
 
             //赋值
             if (right != nullptr) {
