@@ -200,10 +200,10 @@ public:
                 return "returnSlot";
         }
         else if (this->kind == OprandKind::label){
-                return "label";
+                return value2String();
         }
         else if (this->kind == OprandKind::varIndex){
-                return "varIndex";
+                return "var" + value2String();
         }
         else{
             return ::toString(this->kind) + "(" + value2String() + ")";
