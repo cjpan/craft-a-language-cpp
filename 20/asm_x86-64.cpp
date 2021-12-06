@@ -295,7 +295,7 @@ std::string compileToAsm(AstNode& node, bool verbose){
     }
 
     //Lower
-    auto lower = std::make_shared<Lower>(asmModule);
+    auto lower = std::make_shared<Lower>(asmModule, result);
     lower->lowerModule();
 
     auto asmStr = asmModule->toString();

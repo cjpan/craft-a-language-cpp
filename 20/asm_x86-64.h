@@ -974,13 +974,16 @@ public:
      //前一步生成的LIR模型
     std::shared_ptr<AsmModule> asmModule;
 
-    //当前函数使用到的那些Caller保护的寄存器
+    //变量活跃性分析的结果
+    std::shared_ptr<LivenessResult> livenessResult;
+
+    //To Delete 当前函数使用到的那些Caller保护的寄存器
     std::vector<std::shared_ptr<Oprand>> usedCallerProtectedRegs;
 
     //当前函数使用到的那些Callee保护的寄存器
     std::vector<std::shared_ptr<Oprand>>  usedCalleeProtectedRegs;
 
-    //所有变量的总数，包括参数、本地变量和临时变量
+    //To Delete 所有变量的总数，包括参数、本地变量和临时变量
     uint32_t numTotalVars = 0;
 
     //当前函数的参数数量
@@ -992,8 +995,11 @@ public:
     //临时变量的数量
     uint32_t numTempVars = 0;
 
-    //保存已经被Lower的Oprand，用于提高效率
+    //To Delete 保存已经被Lower的Oprand，用于提高效率
     std::map<uint32_t, std::shared_ptr<Oprand>> lowedVars;
+
+
+    std::map<uint32_t, std::shared_ptr<Oprand>> loweredVars;
 
     //需要在栈里保存的为函数传参（超过6个之后的参数）保留的空间，每个参数占8个字节
     uint32_t numArgsOnStack = 0;
@@ -1004,10 +1010,25 @@ public:
     //是否使用RedZone，也就是栈顶之外的128个字节
     bool canUseRedZone = false;
 
-    //已被分配的寄存器
+    //To Delete 已被分配的寄存器
     std::map<std::string, uint32_t> allocatedRegisters;
 
-    Lower(std::shared_ptr<AsmModule>& asmModule): asmModule(asmModule) {}
+    //预留的寄存器。
+    //主要用于在调用函数前，保护起那些马上就要用到的寄存器，不再分配给其他变量。
+    std::set<std::shared_ptr<Oprand>> reservedRegisters;
+
+    //spill的register在内存中的位置。
+    uint32_t spillOffset = 0;
+
+    //被spill的变量
+    //key是varIndex，value是内存地址
+    std::map<uint32_t, std::shared_ptr<Oprand>> spilledVars2Address;
+
+    //key是varIndex，value是原来的寄存器
+    std::map<uint32_t, std::shared_ptr<Oprand>> spilledVars2Reg;
+
+    Lower(std::shared_ptr<AsmModule>& asmModule, std::shared_ptr<LivenessResult>& livenessResult):
+        asmModule(asmModule), livenessResult(livenessResult) {}
 
     void lowerModule() {
         std::map<std::string, std::vector<std::shared_ptr<BasicBlock>>> newFun2Code;
