@@ -1394,6 +1394,75 @@ public:
         return newOprand;
     }
 
+    std::shared_ptr<Oprand> spillVar(uint32_t varIndex, std::shared_ptr<Oprand>& reg, std::vector<std::shared_ptr<Inst>>& newInsts) {
+        std::shared_ptr<Oprand> address;
+        auto it = this->spilledVars2Address.find(varIndex);
+        if(it != this->spilledVars2Address.end()){
+            address = this->spilledVars2Address[varIndex];
+        }
+        else{
+            this->spillOffset += 4;
+            auto rbp = Register::rbp();
+            address = std::make_shared<MemAddress>(rbp, -1 * this->spillOffset);
+            this->spilledVars2Address.insert({varIndex, address});
+            this->spilledVars2Reg.insert({varIndex, reg});
+        }
+
+        auto inst = std::make_shared<Inst_2>(AsmOpCode::movl, reg, address);
+        inst->comment = "spill\tvar" + std::to_string(varIndex);
+        newInsts.push_back(inst);
+
+        this->loweredVars.insert({varIndex, address});
+        return address;
+    }
+
+    std::shared_ptr<Oprand> reloadVar(uint32_t varIndex, std::vector<std::shared_ptr<Inst>>& newInsts) {
+        auto it = this->loweredVars.find(varIndex);
+        if (it == this->loweredVars.end()) {
+            dbg("Error: can't find varIndex: " + std::to_string(varIndex));
+            return nullptr;
+        }
+
+        auto oprand = it->second;
+        if (oprand->kind == OprandKind::memory){
+            auto iter = this->spilledVars2Reg.find(varIndex);
+            if (iter == this->spilledVars2Reg.end()) {
+                dbg("Error: can't find varIndex: " + std::to_string(varIndex));
+                return nullptr;
+            }
+
+            auto reg = iter->second;
+            //查看该reg是否正在被其他变量占用
+            for (auto& item: this->loweredVars){
+                auto& oprand1 = item.second;
+                if (oprand1 == reg){
+                    this->spillVar(varIndex, oprand1, newInsts);
+                    break;
+                }
+            }
+            this->assignRegToVar(varIndex, reg);
+
+            auto inst = std::make_shared<Inst_2>(AsmOpCode::movl, oprand, reg);
+            inst->comment = "reload\tvar" + std::to_string(varIndex);
+            newInsts.push_back(inst);
+
+            return reg;
+        }
+        return nullptr;
+    }
+
+    void assignRegToVar(uint32_t varIndex, std::shared_ptr<Oprand>& reg) {
+
+    }
+
+    std::shared_ptr<Oprand> spillARegister(std::vector<std::shared_ptr<Inst>>& newInsts) {
+        return nullptr;
+    }
+
+    std::shared_ptr<Oprand> getFreeRegister(std::vector<uint32_t>& liveVars) {
+        return nullptr;
+    }
+
     void saveCalleeProtectedRegs(std::vector<std::shared_ptr<Inst>>& newInsts) {
         for (uint32_t i = 0; i  < this->usedCalleeProtectedRegs.size(); i++) {
             auto reg64 = std::find(Register::calleeProtected32.begin(),Register::calleeProtected32.end(), this->usedCalleeProtectedRegs[i]);
