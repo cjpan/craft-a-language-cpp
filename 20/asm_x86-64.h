@@ -1452,15 +1452,77 @@ public:
     }
 
     void assignRegToVar(uint32_t varIndex, std::shared_ptr<Oprand>& reg) {
-
+        //更新usedCalleeProtectedRegs
+        auto it1 = std::find(Register::calleeProtected32.begin(), Register::calleeProtected32.end(), reg);
+        auto it2 = std::find(this->usedCalleeProtectedRegs.begin(), this->usedCalleeProtectedRegs.end(), reg);
+        if(it1 != Register::calleeProtected32.end() && it2 == this->usedCalleeProtectedRegs.end()){
+            this->usedCalleeProtectedRegs.push_back(reg);
+        }
+        //更新loweredVars
+        this->loweredVars.insert({varIndex, reg});
     }
 
     std::shared_ptr<Oprand> spillARegister(std::vector<std::shared_ptr<Inst>>& newInsts) {
+        for (auto& item: this->loweredVars){
+            auto varIndex = item.first;
+            auto oprand = item.second;
+
+            if (oprand->kind == OprandKind::regist &&
+                this->reservedRegisters.find(oprand) != this->reservedRegisters.end()){
+                this->spillVar(varIndex, oprand, newInsts);
+            }
+        }
+
+        //理论上，不会到达这里。
         return nullptr;
     }
 
     std::shared_ptr<Oprand> getFreeRegister(std::vector<uint32_t>& liveVars) {
-        return nullptr;
+        std::shared_ptr<Oprand> result;
+
+        //1.从空余的寄存器中寻找一个。
+        std::set<std::shared_ptr<Oprand>> allocatedRegisters;
+        for (auto& item: this->loweredVars) {
+            auto varIndex = item.first;
+            auto oprand = item.second;
+
+            if(oprand->kind == OprandKind::regist){
+                allocatedRegisters.insert(oprand);
+            }
+            else{
+                auto iter = this->spilledVars2Reg.find(varIndex);
+                if (iter == this->spilledVars2Reg.end()) {
+                    dbg("Error: get spilledVars2Reg failed, varIndex: " + std::to_string(varIndex));
+                }
+
+                allocatedRegisters.insert(iter->second);
+            }
+        }
+
+        for (auto reg: Register::registers32){
+            if (allocatedRegisters.find(reg) == allocatedRegisters.end() &&
+                this->reservedRegisters.find(reg) == this->reservedRegisters.end()) {
+                result = reg;
+                break;
+            }
+        }
+
+        return result;
+
+        //2.从已分配的varIndex里面找一个
+        // if (result == null){
+        //     for (let varIndex of this->loweredVars.keys()){
+        //         // todo 下面的逻辑是不安全的，在存在cfg的情况下，不能简单的判断变量是否真的没用了。
+        //         if (liveVars.indexOf(varIndex) == -1){
+        //             let oprand = this->loweredVars.get(varIndex) as Oprand;
+        //             if (oprand.kind == OprandKind.register && this->reservedRegisters.indexOf(oprand as Register)==-1){
+        //                 result = oprand as Register;
+        //                 this->loweredVars.delete(varIndex);
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     void saveCalleeProtectedRegs(std::vector<std::shared_ptr<Inst>>& newInsts) {
