@@ -1094,6 +1094,23 @@ public:
         return;
     }
 
+    void lowerParams(){
+        for (uint32_t i = 0; i< this->numParams; i++){
+            if (i < 6u){
+                auto reg = Register::paramRegisters32[i];
+                this->assignRegToVar(i, reg);
+            }
+            else{
+                //从Caller的栈里访问参数
+                int32_t offset = (static_cast<int32_t>(i) - 6) * 8 + 16;  //+16是因为有一个callq压入的返回地址，一个pushq rbp又加了8个字节
+                auto rbp = Register::rbp();
+                auto oprand = std::make_shared<MemAddress>(rbp, offset);
+                this->loweredVars.insert({i, oprand});
+            }
+        }
+    }
+
+
     void lowerVars() {
         uint32_t paramsToSave = this->numParams > 6 ? 6: this->numParams;
 
