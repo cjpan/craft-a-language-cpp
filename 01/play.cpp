@@ -141,6 +141,7 @@ class AstNode{
 protected:
     AstNodeType type = AstNodeType::AstNode;
 public:
+    virtual ~AstNode() {}
     //打印对象信息，prefix是前面填充的字符串，通常用于缩进显示
     virtual void dump(const std::string& prefix) {};
     virtual AstNodeType getType() {return this->type;}
@@ -159,6 +160,7 @@ public:
 
 class Prog: public AstNode{
 public:
+    ~Prog() {}
     std::vector<std::shared_ptr<Statement>> stmts; //程序中可以包含多个语句
     Prog(std::vector<std::shared_ptr<Statement>> stmts){
         this->stmts = stmts;
@@ -173,7 +175,7 @@ public:
 /**
  * 函数调用
  */
-struct FunctionDecl;
+class FunctionDecl;
 class FunctionCall: public Statement{
 public:
     std::string name;
