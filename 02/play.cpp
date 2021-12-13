@@ -284,14 +284,14 @@ private:
     }
 
     bool isLetterDigitOrUnderScore(char ch) {
-        return (ch>='A' && ch<='Z' ||
-                ch>='a' && ch<='z' ||
-                ch>='0' && ch<='9' ||
+        return ((ch>='A' && ch<='Z') ||
+                (ch>='a' && ch<='z') ||
+                (ch>='0' && ch<='9') ||
                 ch== '_');
     }
 
     bool isLetter(char ch) {
-        return (ch>='A' && ch <='Z' || ch>= 'a' && ch <='z');
+        return ((ch>='A' && ch <='Z') || (ch>= 'a' && ch <='z'));
     }
 
     bool isDigit(char ch) {
@@ -310,6 +310,7 @@ protected:
     AstNodeType type = AstNodeType::AstNode;
 public:
     //打印对象信息，prefix是前面填充的字符串，通常用于缩进显示
+    virtual ~AstNode() {}
     virtual void dump(const std::string& prefix) {};
     virtual AstNodeType getType() {return this->type;}
 };
@@ -341,7 +342,7 @@ public:
 /**
  * 函数调用
  */
-struct FunctionDecl;
+class FunctionDecl;
 class FunctionCall: public Statement{
 public:
     std::string name;
