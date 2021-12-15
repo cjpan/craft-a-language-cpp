@@ -143,7 +143,7 @@ public:
         }
 
         if (this->tokens.size() < 2) {
-            return Token{TokenKind::Eof, text:""};
+            return Token{.kind = TokenKind::Eof, .text = ""};
         }
 
         auto it = this->tokens.begin();
@@ -355,7 +355,7 @@ private:
                 if (ch1 == '='){
                     this->stream.next();
                     auto ch1 = this->stream.peek();
-                    if (ch1='='){
+                    if (ch1 == '='){
                         this->stream.next();
                         return {TokenKind::Operator, "==="};
                     }
@@ -378,7 +378,7 @@ private:
                 if (ch1 == '='){
                     this->stream.next();
                     auto ch1 = this->stream.peek();
-                    if (ch1='='){
+                    if (ch1 == '='){
                         this->stream.next();
                         return {TokenKind::Operator, "!=="};
                     }
@@ -483,7 +483,7 @@ private:
     }
 
     Token parseStringLiteral() {
-        Token token {TokenKind::StringLiteral, ""};
+        Token token {.kind = TokenKind::StringLiteral, .text = ""};
 
         //第一个字符不用判断，因为在调用者那里已经判断过了
         this->stream.next();
@@ -504,7 +504,7 @@ private:
     }
 
     Token parseIdentifer() {
-        Token token = {TokenKind::Identifier,  ""};
+        Token token {.kind = TokenKind::Identifier, .text = ""};
 
         //第一个字符不用判断，因为在调用者那里已经判断过了
         token.text.push_back(this->stream.next());
@@ -532,14 +532,14 @@ private:
     }
 
     bool isLetterDigitOrUnderScore(char ch) {
-        return (ch>='A' && ch<='Z' ||
-                ch>='a' && ch<='z' ||
-                ch>='0' && ch<='9' ||
-                ch== '_');
+        return ((ch >= 'A' && ch <= 'Z') ||
+                (ch >= 'a' && ch <= 'z') ||
+                (ch >= '0' && ch <= '9') ||
+                (ch ==  '_'));
     }
 
     bool isLetter(char ch) {
-        return (ch>='A' && ch <='Z' || ch>= 'a' && ch <='z');
+        return ((ch>='A' && ch <='Z') || (ch>= 'a' && ch <='z'));
     }
 
     bool isDigit(char ch) {
@@ -564,9 +564,10 @@ std::set<std::string> Scanner::KeyWords
     "interface", "package",   "protected",   "static"
 };
 
-struct AstVisitor;
+class AstVisitor;
 class AstNode{
 public:
+    virtual ~AstNode() {}
     //打印对象信息，prefix是前面填充的字符串，通常用于缩进显示
     virtual void dump(const std::string& prefix) {}
 
@@ -580,11 +581,11 @@ class Statement: public AstNode{
 class Expression: public AstNode{
 };
 
-struct Block;
-struct Prog;
-struct Binary;
-struct IntegerLiteral;
-struct ExpressionStatement;
+class Block;
+class Prog;
+class Binary;
+class IntegerLiteral;
+class ExpressionStatement;
 
 class AstVisitor{
 public:
