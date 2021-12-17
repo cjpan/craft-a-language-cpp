@@ -9,6 +9,7 @@
 #include <functional>
 #include <typeindex>
 #include <typeinfo>
+#include <unordered_map>
 
 std::string Print(const std::string& str, Color color) {
     static std::map<Color, std::string> colors {
@@ -19,9 +20,9 @@ std::string Print(const std::string& str, Color color) {
         {Color::Blue, "\033[0;34m"},
     };
 
-    printf(colors[color].c_str());
+    //printf(colors[color].c_str());
     printf("%s\n", str.c_str());
-    printf(colors[Color::Reset].c_str());
+    //printf(colors[Color::Reset].c_str());
 
     return str + "\n";
 }

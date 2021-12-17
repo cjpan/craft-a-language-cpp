@@ -22,8 +22,8 @@ class VarSymbol;
 class FunctionSymbol;
 class SymbolVisitor{
 public:
-    virtual std::any visitVarSymbol(VarSymbol& sym, std::string additional);
-    virtual std::any visitFunctionSymbol(FunctionSymbol&sym, std::string additional);
+    virtual std::any visitVarSymbol(VarSymbol& sym, std::string additional) = 0;
+    virtual std::any visitFunctionSymbol(FunctionSymbol&sym, std::string additional) = 0;
 };
 
 
@@ -36,6 +36,7 @@ public:
         name(name), theType(theType), kind(kind){
     }
 
+    virtual ~Symbol() {}
     //
     // visitor模式
     // @param vistor

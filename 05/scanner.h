@@ -226,7 +226,7 @@ public:
         }
 
         if (this->tokens.size() < 2) {
-            return Token{TokenKind::Eof, text:"EOF", Position()};
+            return Token{TokenKind::Eof, "EOF", Position()};
         }
 
         auto it = this->tokens.begin();

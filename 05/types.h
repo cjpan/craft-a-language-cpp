@@ -36,6 +36,7 @@ public:
     std::string name;
 
     Type(const std::string& name): name(name){}
+    virtual ~Type() {}
 
     /**
      * 类型中是否包含void。
@@ -146,7 +147,7 @@ public:
         return type;
     }
 
-    static isSysType(std::shared_ptr<Type>& t){
+    static bool isSysType(std::shared_ptr<Type>& t){
         return *t == *SysTypes::Any()     || *t == *SysTypes::String()  || *t == *SysTypes::Number() ||
                *t == *SysTypes::Boolean() || *t == *SysTypes::Null()    || *t == *SysTypes::Undefined() ||
                *t == *SysTypes::Void()    || *t == *SysTypes::Integer() || *t == *SysTypes::Decimal();

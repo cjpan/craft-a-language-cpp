@@ -87,6 +87,7 @@ public:
         beginPos(beginPos), endPos(endPos), isErrorNode(isErrorNode){
     }
 
+    virtual ~AstNode() {}
     //visitor模式中，用于接受vistor的访问。
     virtual std::any accept(AstVisitor& visitor, std::string additional) = 0;
 };
