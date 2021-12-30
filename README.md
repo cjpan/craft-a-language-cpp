@@ -1,5 +1,7 @@
 # Craft A Language
 
+![avatar](architecture.png)
+
 #### 介绍
 极客时间《手把手带你写一门计算机语言》课程CPP版
 1. 使用C++17语法
